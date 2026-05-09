@@ -17,6 +17,12 @@ remappings = [
 runs = 1000
 max_test_rejects = 100000
 
+[rpc_endpoints]
+push_testnet = "${PC_RPC}"
+
+[etherscan]
+push_testnet = { key = "blockscout", url = "https://donut.push.network/api", chain = 42101 }
+
 [fmt]
 line_length = 100
 tab_width = 4

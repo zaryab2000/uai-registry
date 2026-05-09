@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 /// @dev Minimal mock of ERC-8004 ReputationRegistryUpgradeable for testing
-///      ReputationRegistryPlus. Simulates giveFeedback(), getSummary(),
+///      ReputationRegistrySource. Simulates giveFeedback(), getSummary(),
 ///      getClients().
 contract MockReputationRegistry {
     struct StoredFeedback {

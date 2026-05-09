@@ -1,8 +1,8 @@
-# UAIRegistry
+# AgentRegistry
 
 Universal Agent Identity Registry on Push Chain.
 
-UAIRegistry is the canonical identity contract for AI agents operating across multiple blockchains. It lives on Push Chain and serves as the single source of truth for "who is this agent?" regardless of which chain the agent originally registered on.
+AgentRegistry is the canonical identity contract for AI agents operating across multiple blockchains. It lives on Push Chain and serves as the single source of truth for "who is this agent?" regardless of which chain the agent originally registered on.
 
 Every agent gets one identity. That identity can be linked to per-chain registrations on Ethereum, Base, Arbitrum, or any EVM-compatible chain running an ERC-8004 IdentityRegistry. The result is a unified, cross-chain identity graph for AI agents, anchored to a soulbound (non-transferable) record on Push Chain.
 
@@ -21,13 +21,13 @@ Without a canonical registry, "cross-chain agent identity" is a manual, trust-th
 
 ---
 
-## How UAIRegistry Solves It
+## How AgentRegistry Solves It
 
-UAIRegistry introduces a two-layer identity model:
+AgentRegistry introduces a two-layer identity model:
 
 1. **Canonical identity on Push Chain** -- the agent registers once on Push Chain via its Universal Executor Account (UEA). This creates a soulbound, non-transferable identity record.
 
-2. **Shadow links to per-chain identities** -- the agent links its per-chain ERC-8004 registrations (called "shadows") to the canonical identity. Each link is cryptographically verified via EIP-712 signatures.
+2. **Bindings to per-chain identities** -- the agent links its per-chain ERC-8004 registrations (called "bindings") to the canonical identity. Each binding is cryptographically verified via EIP-712 signatures.
 
 ### The UEA as Canonical Anchor
 
@@ -53,34 +53,34 @@ On first registration, the contract queries the UEA factory to determine:
 
 Subsequent calls to `register()` update the `agentURI` and `agentCardHash` without modifying origin metadata. This is the re-registration path -- same function, idempotent semantics.
 
-### Shadow Linking
+### Binding
 
-Once registered, the agent links its per-chain ERC-8004 registrations to the canonical identity. Each link is called a "shadow" and represents a binding between:
+Once registered, the agent links its per-chain ERC-8004 registrations to the canonical identity. Each binding represents a link between:
 
 - The canonical agent on Push Chain (identified by `agentId`)
-- A per-chain agent on another chain (identified by `chainNamespace`, `chainId`, `registryAddress`, `shadowAgentId`)
+- A per-chain agent on another chain (identified by `chainNamespace`, `chainId`, `registryAddress`, `boundAgentId`)
 
-#### How Shadow Linking Works
+#### How Binding Works
 
 1. **The agent constructs an EIP-712 typed data message** containing:
    - `canonicalUEA`: The UEA address on Push Chain
    - `chainNamespace`: CAIP-2 namespace of the target chain (e.g., `"eip155"`)
    - `chainId`: CAIP-2 chain ID (e.g., `"1"`)
    - `registryAddress`: The ERC-8004 IdentityRegistry contract address on that chain
-   - `shadowAgentId`: The agent's ID on that chain's registry
+   - `boundAgentId`: The agent's ID on that chain's registry
    - `nonce`: A unique nonce to prevent replay
    - `deadline`: Timestamp after which the signature expires
 
 2. **The agent signs this message** with the private key that controls the UEA (the `ownerKey` recorded at registration). The signature proves that the same entity controlling the canonical identity also controls the per-chain identity.
 
-3. **The agent calls `linkShadow()`** on Push Chain with the signed request. The contract:
+3. **The agent calls `bind()`** on Push Chain with the signed request. The contract:
    - Verifies the agent is registered
    - Checks chain identifiers and registry address are valid
    - Validates the deadline hasn't expired and the nonce hasn't been used
-   - Checks the shadow isn't already claimed by another agent (global uniqueness)
-   - Checks the agent hasn't exceeded the 64-shadow limit
+   - Checks the binding isn't already claimed by another agent (global uniqueness)
+   - Checks the agent hasn't exceeded the 64-binding limit
    - Verifies the signature against the `ownerKey` (supports both ECDSA and ERC-1271 contract signatures)
-   - Stores the shadow entry and updates all indexes
+   - Stores the bind entry and updates all indexes
 
 #### Signature Verification
 
@@ -91,12 +91,12 @@ The contract supports two signature schemes:
 
 #### Deduplication and Uniqueness
 
-- **Global uniqueness**: A shadow tuple `(chainNamespace, chainId, registryAddress, shadowAgentId)` can only be claimed by one canonical agent. This prevents two agents from claiming the same per-chain identity.
-- **Per-agent uniqueness**: An agent can have at most one shadow per `(chainNamespace, chainId, registryAddress)` tuple. To change the `shadowAgentId` for a given chain+registry, the agent must unlink first, then relink.
+- **Global uniqueness**: A binding tuple `(chainNamespace, chainId, registryAddress, boundAgentId)` can only be claimed by one canonical agent. This prevents two agents from claiming the same per-chain identity.
+- **Per-agent uniqueness**: An agent can have at most one binding per `(chainNamespace, chainId, registryAddress)` tuple. To change the `boundAgentId` for a given chain+registry, the agent must unbind first, then rebind.
 
-#### Unlinking
+#### Unbinding
 
-The agent calls `unlinkShadow(chainNamespace, chainId, registryAddress)` to remove a shadow link. This uses a swap-and-pop pattern on the shadows array for gas efficiency -- the entry to remove is swapped with the last entry, then the array is popped. All indexes are updated accordingly.
+The agent calls `unbind(chainNamespace, chainId, registryAddress)` to remove a binding. This uses a swap-and-pop pattern on the bindings array for gas efficiency -- the entry to remove is swapped with the last entry, then the array is popped. All indexes are updated accordingly.
 
 ### Soulbound Semantics
 
@@ -108,10 +108,10 @@ Agent identities are non-transferable. The contract implements the ERC-721 trans
 
 ### Storage Architecture
 
-UAIRegistry uses ERC-7201 namespaced storage for upgrade safety. All state lives in a single storage struct at a deterministic slot:
+AgentRegistry uses ERC-7201 namespaced storage for upgrade safety. All state lives in a single storage struct at a deterministic slot:
 
 ```
-STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("uairegistry.storage")) - 1))
+STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("agentgraph.registry.storage")) - 1))
                 & ~bytes32(uint256(0xff))
 ```
 
@@ -120,52 +120,52 @@ The storage struct contains:
 | Field | Type | Purpose |
 |-------|------|---------|
 | `records` | `mapping(uint256 => AgentRecord)` | Agent ID to registration record |
-| `shadows` | `mapping(uint256 => ShadowEntry[])` | Agent ID to array of shadow links |
-| `shadowToCanonical` | `mapping(bytes32 => uint256)` | Dedup key to canonical agent ID (global uniqueness) |
-| `shadowIndex` | `mapping(uint256 => mapping(bytes32 => uint256))` | Agent ID + chain key to array index (for O(1) lookup) |
-| `shadowExists` | `mapping(uint256 => mapping(bytes32 => bool))` | Agent ID + chain key to existence flag |
+| `bindings` | `mapping(uint256 => BindEntry[])` | Agent ID to array of bindings |
+| `bindToCanonical` | `mapping(bytes32 => uint256)` | Dedup key to canonical agent ID (global uniqueness) |
+| `bindIndex` | `mapping(uint256 => mapping(bytes32 => uint256))` | Agent ID + chain key to array index (for O(1) lookup) |
+| `bindExists` | `mapping(uint256 => mapping(bytes32 => bool))` | Agent ID + chain key to existence flag |
 | `usedNonces` | `mapping(uint256 => mapping(uint256 => bool))` | Agent ID + nonce to used flag (replay protection) |
 
 ### Access Control and Pausability
 
 - **DEFAULT_ADMIN_ROLE**: Can grant/revoke roles. Set at initialization.
-- **PAUSER_ROLE**: Can pause/unpause the contract. Registration, metadata updates, shadow linking, and shadow unlinking are all pausable.
+- **PAUSER_ROLE**: Can pause/unpause the contract. Registration, metadata updates, binding, and unbinding are all pausable.
 - The contract is deployed behind a `TransparentUpgradeableProxy`.
 
 ---
 
 ## Novel Features (Beyond ERC-8004)
 
-ERC-8004 defines per-chain identity registries with transferable ERC-721 tokens and no cross-chain awareness. UAIRegistry introduces several features that do not exist in the base specification.
+ERC-8004 defines per-chain identity registries with transferable ERC-721 tokens and no cross-chain awareness. AgentRegistry introduces several features that do not exist in the base specification.
 
 ### Soulbound Identity Tokens
 
-ERC-8004 issues transferable ERC-721 tokens for agent identity. UAIRegistry overrides the entire ERC-721 transfer surface (`transferFrom`, `safeTransferFrom`, `approve`, `setApprovalForAll`) to revert unconditionally with `IdentityNotTransferable()`. Agent identity is permanently bound to the UEA that created it — it cannot be sold, delegated, or transferred to another entity. This guarantees that the `agentId ↔ UEA` relationship is immutable after registration.
+ERC-8004 issues transferable ERC-721 tokens for agent identity. AgentRegistry overrides the entire ERC-721 transfer surface (`transferFrom`, `safeTransferFrom`, `approve`, `setApprovalForAll`) to revert unconditionally with `IdentityNotTransferable()`. Agent identity is permanently bound to the UEA that created it — it cannot be sold, delegated, or transferred to another entity. This guarantees that the `agentId ↔ UEA` relationship is immutable after registration.
 
-### Shadow Linking with EIP-712 Cryptographic Proof
+### Binding with EIP-712 Cryptographic Proof
 
-ERC-8004 has no concept of cross-chain identity binding. UAIRegistry introduces `linkShadow`, where the UEA owner signs an EIP-712 typed data message proving they control the same identity on another chain's ERC-8004 registry. The signature binds the canonical UEA, target chain namespace, chain ID, registry address, shadow agent ID, nonce, and deadline into a single verifiable proof. Both EOA signatures (ECDSA recovery) and smart wallet signatures (ERC-1271 `isValidSignature`) are supported, so agents controlled by multisigs or account-abstraction wallets can link shadows without workarounds.
+ERC-8004 has no concept of cross-chain identity binding. AgentRegistry introduces `bind`, where the UEA owner signs an EIP-712 typed data message proving they control the same identity on another chain's ERC-8004 registry. The signature binds the canonical UEA, target chain namespace, chain ID, registry address, bound agent ID, nonce, and deadline into a single verifiable proof. Both EOA signatures (ECDSA recovery) and smart wallet signatures (ERC-1271 `isValidSignature`) are supported, so agents controlled by multisigs or account-abstraction wallets can create bindings without workarounds.
 
-### Global Shadow Deduplication
+### Global Binding Deduplication
 
-A shadow identity tuple `(chainNamespace, chainId, registryAddress, shadowAgentId)` can only be linked to one canonical UEA at a time. If agent A links to shadow ID 42 on Ethereum's registry, agent B cannot claim the same shadow — the transaction reverts with `ShadowAlreadyClaimed`. When agent A unlinks, the dedup key is freed and another agent may claim it. This enforces a strict one-to-one binding between per-chain identities and canonical identities, preventing impersonation where two canonical agents claim to be the same per-chain entity.
+A bound identity tuple `(chainNamespace, chainId, registryAddress, boundAgentId)` can only be linked to one canonical UEA at a time. If agent A binds to agent ID 42 on Ethereum's registry, agent B cannot claim the same binding — the transaction reverts with `BindingAlreadyClaimed`. When agent A unbinds, the dedup key is freed and another agent may claim it. This enforces a strict one-to-one binding between per-chain identities and canonical identities, preventing impersonation where two canonical agents claim to be the same per-chain entity.
 
 ---
 
-## How UAIRegistry Works with ERC-8004
+## How AgentRegistry Works with ERC-8004
 
 ERC-8004 defines the per-chain standard for agent identity and reputation. Each chain deploys its own `IdentityRegistry` (and optionally `ReputationRegistryUpgradeable`). Agents register on each chain independently through these per-chain contracts.
 
-UAIRegistry sits on top of ERC-8004 as the **cross-chain unification layer**:
+AgentRegistry sits on top of ERC-8004 as the **cross-chain unification layer**:
 
 ```
                          Push Chain
                     +-----------------+
-                    |   UAIRegistry   |
+                    | AgentRegistry   |
                     |  (canonical ID) |
                     +--------+--------+
                              |
-              shadow links   |   shadow links
+                  bindings   |   bindings
            +-----------------+-----------------+
            |                 |                 |
     +------+------+   +------+------+   +------+------+
@@ -177,12 +177,12 @@ UAIRegistry sits on top of ERC-8004 as the **cross-chain unification layer**:
 
 The relationship is:
 - ERC-8004 handles per-chain registration, metadata, and local operations.
-- UAIRegistry maps per-chain registrations to a single canonical identity.
-- Shadow links are the bridge -- each link says "agent #42 on Ethereum's IdentityRegistry at `0xABC...` is the same entity as canonical agent `0x123...` on Push Chain."
+- AgentRegistry maps per-chain registrations to a single canonical identity.
+- Bindings are the bridge -- each binding says "agent #42 on Ethereum's IdentityRegistry at `0xABC...` is the same entity as canonical agent `0x123...` on Push Chain."
 
 ### Reverse Lookups
 
-The `canonicalUEAFromShadow()` function enables reverse resolution: given a per-chain agent identity (chain namespace, chain ID, registry address, shadow agent ID), find the canonical UEA on Push Chain. This is the key primitive that allows any chain to resolve a cross-chain agent identity question.
+The `canonicalUEAFromBinding()` function enables reverse resolution: given a per-chain agent identity (chain namespace, chain ID, registry address, bound agent ID), find the canonical UEA on Push Chain. This is the key primitive that allows any chain to resolve a cross-chain agent identity question.
 
 ---
 
@@ -199,12 +199,12 @@ The operator's Ethereum address is `0xAlice...`. They use the Push Chain UEA fac
 
 The UEA is deployed at address `0xUEA_Alice...` on Push Chain.
 
-### Step 2: Register on UAIRegistry
+### Step 2: Register on AgentRegistry
 
 From the UEA (`0xUEA_Alice...`), the operator calls:
 
 ```solidity
-uaiRegistry.register(
+agentRegistry.register(
     "ipfs://QmAlphaBotCard",        // agent card metadata URI
     keccak256(agentCardJSON)         // hash of the agent card content
 );
@@ -214,19 +214,19 @@ This creates a canonical identity with `agentId = uint256(uint160(0xUEA_Alice...
 
 ### Step 3: Register on Per-Chain ERC-8004 Registries
 
-The operator registers AlphaBot on Ethereum's ERC-8004 IdentityRegistry (getting `shadowAgentId = 17`) and on Base's ERC-8004 IdentityRegistry (getting `shadowAgentId = 42`).
+The operator registers AlphaBot on Ethereum's ERC-8004 IdentityRegistry (getting `boundAgentId = 17`) and on Base's ERC-8004 IdentityRegistry (getting `boundAgentId = 42`).
 
-### Step 4: Link Ethereum Shadow
+### Step 4: Bind Ethereum Identity
 
 The operator constructs an EIP-712 message:
 
 ```
-ShadowLink(
+Bind(
     canonicalUEA: 0xUEA_Alice...,
     chainNamespace: "eip155",
     chainId: "1",
     registryAddress: 0xEthIdentityRegistry...,
-    shadowAgentId: 17,
+    boundAgentId: 17,
     nonce: 1,
     deadline: <current timestamp + 1 hour>
 )
@@ -235,31 +235,31 @@ ShadowLink(
 They sign this with the private key of `0xAlice...` (the owner key), then call:
 
 ```solidity
-uaiRegistry.linkShadow(ShadowLinkRequest({
+agentRegistry.bind(BindRequest({
     chainNamespace: "eip155",
     chainId: "1",
     registryAddress: 0xEthIdentityRegistry...,
-    shadowAgentId: 17,
-    proofType: ShadowProofType.OWNER_KEY_SIGNED,
+    boundAgentId: 17,
+    proofType: BindProofType.OWNER_KEY_SIGNED,
     proofData: signature,
     nonce: 1,
     deadline: block.timestamp + 1 hours
 }));
 ```
 
-The contract verifies the signature, confirms the shadow isn't already claimed, and stores the link.
+The contract verifies the signature, confirms the binding isn't already claimed, and stores the binding.
 
-### Step 5: Link Base Shadow
+### Step 5: Bind Base Identity
 
 Same process for Base:
 
 ```solidity
-uaiRegistry.linkShadow(ShadowLinkRequest({
+agentRegistry.bind(BindRequest({
     chainNamespace: "eip155",
     chainId: "8453",
     registryAddress: 0xBaseIdentityRegistry...,
-    shadowAgentId: 42,
-    proofType: ShadowProofType.OWNER_KEY_SIGNED,
+    boundAgentId: 42,
+    proofType: BindProofType.OWNER_KEY_SIGNED,
     proofData: baseSignature,
     nonce: 2,
     deadline: block.timestamp + 1 hours
@@ -271,7 +271,7 @@ uaiRegistry.linkShadow(ShadowLinkRequest({
 Now, a user on Base interacting with agent #42 wants to know if this agent has a canonical identity. They (or a dApp, or another contract) query Push Chain:
 
 ```solidity
-(address canonical, bool verified) = uaiRegistry.canonicalUEAFromShadow(
+(address canonical, bool verified) = agentRegistry.canonicalUEAFromBinding(
     "eip155",
     "8453",
     0xBaseIdentityRegistry...,
@@ -284,7 +284,7 @@ Now, a user on Base interacting with agent #42 wants to know if this agent has a
 The user can then query the full agent record:
 
 ```solidity
-IUAIRegistry.AgentRecord memory record = uaiRegistry.getAgentRecord(
+IAgentRegistry.AgentRecord memory record = agentRegistry.getAgentRecord(
     uint256(uint160(canonical))
 );
 // record.agentURI = "ipfs://QmAlphaBotCard"
@@ -293,12 +293,12 @@ IUAIRegistry.AgentRecord memory record = uaiRegistry.getAgentRecord(
 // record.registeredAt = <timestamp>
 ```
 
-And see all linked shadows:
+And see all bindings:
 
 ```solidity
-IUAIRegistry.ShadowEntry[] memory shadows = uaiRegistry.getShadows(agentId);
-// shadows[0]: Ethereum mainnet, agentId 17
-// shadows[1]: Base, agentId 42
+IAgentRegistry.BindEntry[] memory bindings = agentRegistry.getBindings(agentId);
+// bindings[0]: Ethereum mainnet, agentId 17
+// bindings[1]: Base, agentId 42
 ```
 
 The user now has cryptographic proof that agent #42 on Base and agent #17 on Ethereum are the same entity, with a verifiable metadata URI and the ability to check the agent's cross-chain reputation (via ReputationRegistry).
@@ -308,25 +308,25 @@ The user now has cryptographic proof that agent #42 on Base and agent #17 on Eth
 If AlphaBot upgrades its model or capabilities, the operator updates the agent card:
 
 ```solidity
-uaiRegistry.setAgentURI("ipfs://QmAlphaBotCardV2");
-uaiRegistry.setAgentCardHash(keccak256(newAgentCardJSON));
+agentRegistry.setAgentURI("ipfs://QmAlphaBotCardV2");
+agentRegistry.setAgentCardHash(keccak256(newAgentCardJSON));
 ```
 
-This update is immediately visible to all chains that resolve through UAIRegistry. No need to update per-chain registrations for identity metadata.
+This update is immediately visible to all chains that resolve through AgentRegistry. No need to update per-chain registrations for identity metadata.
 
-### Step 8: Unlinking a Shadow
+### Step 8: Unbinding
 
-If AlphaBot stops operating on Base, the operator removes the shadow link:
+If AlphaBot stops operating on Base, the operator removes the binding:
 
 ```solidity
-uaiRegistry.unlinkShadow(
+agentRegistry.unbind(
     "eip155",
     "8453",
     0xBaseIdentityRegistry...
 );
 ```
 
-The shadow is removed, the dedup key is freed (another agent could now claim that per-chain identity), and future reverse lookups for that shadow return `(address(0), false)`.
+The binding is removed, the dedup key is freed (another agent could now claim that per-chain identity), and future reverse lookups for that binding return `(address(0), false)`.
 
 ---
 
@@ -340,12 +340,12 @@ The shadow is removed, the dedup key is freed (another agent could now claim tha
 | `setAgentURI(newAgentURI)` | UEA owner | Update metadata URI only. |
 | `setAgentCardHash(newHash)` | UEA owner | Update agent card hash only. |
 
-### Shadow Linking
+### Binding
 
 | Function | Access | Description |
 |----------|--------|-------------|
-| `linkShadow(req)` | UEA owner | Link a per-chain ERC-8004 identity with EIP-712 proof. |
-| `unlinkShadow(ns, id, addr)` | UEA owner | Remove a shadow link. |
+| `bind(req)` | UEA owner | Bind a per-chain ERC-8004 identity with EIP-712 proof. |
+| `unbind(ns, id, addr)` | UEA owner | Remove a binding. |
 
 ### Reads
 
@@ -356,8 +356,8 @@ The shadow is removed, the dedup key is freed (another agent could now claim tha
 | `agentURI(agentId)` | Metadata URI (ERC-8004 alias). |
 | `canonicalUEA(agentId)` | UEA address for an agent ID. |
 | `agentIdOfUEA(uea)` | Agent ID for a UEA address (0 if unregistered). |
-| `getShadows(agentId)` | All shadow entries for an agent. |
-| `canonicalUEAFromShadow(ns, id, addr, shadowId)` | Resolve shadow to canonical UEA. |
+| `getBindings(agentId)` | All bind entries for an agent. |
+| `canonicalUEAFromBinding(ns, id, addr, boundId)` | Resolve binding to canonical UEA. |
 | `isRegistered(agentId)` | Check registration status. |
 | `getAgentRecord(agentId)` | Full on-chain record. |
 

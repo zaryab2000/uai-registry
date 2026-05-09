@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 /// @title IReputationRegistry
 /// @notice Cross-chain agent reputation aggregator on Push Chain.
 ///         Stores per-chain reputation snapshots submitted by authorized reporters
-///         and computes aggregated scores keyed to canonical UEA via UAIRegistry.
+///         and computes aggregated scores keyed to canonical UEA via AgentRegistry.
 interface IReputationRegistry {
     // ──────────────────────────────────────────────
     //  Types
@@ -15,7 +15,7 @@ interface IReputationRegistry {
         string chainNamespace;
         string chainId;
         address registryAddress;
-        uint256 shadowAgentId;
+        uint256 boundAgentId;
         uint64 feedbackCount;
         int128 summaryValue;
         uint8 valueDecimals;
@@ -55,7 +55,7 @@ interface IReputationRegistry {
         string chainNamespace;
         string chainId;
         address registryAddress;
-        uint256 shadowAgentId;
+        uint256 boundAgentId;
         uint64 feedbackCount;
         int128 summaryValue;
         uint8 valueDecimals;
@@ -96,8 +96,8 @@ interface IReputationRegistry {
         address indexed reporter
     );
 
-    /// @notice Emitted when the UAIRegistry address is updated.
-    event UAIRegistryUpdated(address indexed oldAddr, address indexed newAddr);
+    /// @notice Emitted when the AgentRegistry address is updated.
+    event AgentRegistryUpdated(address indexed oldAddr, address indexed newAddr);
 
     // ──────────────────────────────────────────────
     //  Write Functions
@@ -105,7 +105,7 @@ interface IReputationRegistry {
 
     /// @notice Submit or update per-chain reputation for an agent.
     /// @dev Only callable by REPORTER_ROLE. Validates agent registration
-    ///      and shadow link existence in UAIRegistry. Recomputes aggregate.
+    ///      and binding existence in AgentRegistry. Recomputes aggregate.
     /// @param submission The reputation data to submit.
     function submitReputation(
         ReputationSubmission calldata submission
@@ -120,7 +120,7 @@ interface IReputationRegistry {
 
     /// @notice Record a slashing event for an agent.
     /// @dev Only callable by SLASHER_ROLE. Slash records persist even
-    ///      after shadow unlinks.
+    ///      after unbinding.
     /// @param agentId The canonical agent ID.
     /// @param chainNamespace Source chain namespace where slash originated.
     /// @param chainId Source chain ID.
@@ -137,17 +137,17 @@ interface IReputationRegistry {
     ) external;
 
     /// @notice Force recomputation of aggregated reputation for an agent.
-    /// @dev Callable by anyone. Removes data for unlinked shadows.
+    /// @dev Callable by anyone. Removes data for unlinked bindings.
     /// @param agentId The canonical agent ID.
     function reaggregate(
         uint256 agentId
     ) external;
 
-    /// @notice Update the UAIRegistry address.
+    /// @notice Update the AgentRegistry address.
     /// @dev Only callable by DEFAULT_ADMIN_ROLE.
-    /// @param newUAIRegistry The new UAIRegistry proxy address.
-    function setUAIRegistry(
-        address newUAIRegistry
+    /// @param newAgentRegistry The new AgentRegistry proxy address.
+    function setAgentRegistry(
+        address newAgentRegistry
     ) external;
 
     // ──────────────────────────────────────────────
@@ -209,7 +209,7 @@ interface IReputationRegistry {
         uint256 agentId
     ) external view returns (uint64);
 
-    /// @notice Get the current UAIRegistry address.
-    /// @return The UAIRegistry contract address.
-    function getUAIRegistry() external view returns (address);
+    /// @notice Get the current AgentRegistry address.
+    /// @return The AgentRegistry contract address.
+    function getAgentRegistry() external view returns (address);
 }

@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {ReputationRegistryPlus} from "src/source/ReputationRegistryPlus.sol";
+import {ReputationRegistrySource} from "src/source/ReputationRegistrySource.sol";
 import {
     InvalidGatewayAdapter,
     InvalidSettlementRegistry,
@@ -13,8 +13,8 @@ import {MockGatewayAdapter} from "./mocks/MockGateway.sol";
 import {MockReputationRegistry} from "./mocks/MockReputationRegistry.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-contract ReputationRegistryPlusTest is Test {
-    ReputationRegistryPlus public plus;
+contract ReputationRegistrySourceTest is Test {
+    ReputationRegistrySource public plus;
     MockGatewayAdapter public gateway;
     MockReputationRegistry public localReg;
 
@@ -38,15 +38,15 @@ contract ReputationRegistryPlusTest is Test {
         gateway = new MockGatewayAdapter(GATEWAY_FEE);
         localReg = new MockReputationRegistry();
 
-        ReputationRegistryPlus impl = new ReputationRegistryPlus();
+        ReputationRegistrySource impl = new ReputationRegistrySource();
         ERC1967Proxy proxy = new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                ReputationRegistryPlus.initialize,
+                ReputationRegistrySource.initialize,
                 (owner, address(localReg), address(gateway), settlement)
             )
         );
-        plus = ReputationRegistryPlus(address(proxy));
+        plus = ReputationRegistrySource(address(proxy));
 
         vm.prank(owner);
         plus.setPropagationEnabled(true);
@@ -104,50 +104,51 @@ contract ReputationRegistryPlusTest is Test {
     }
 
     function test_Initialize_ZeroGateway_Reverts() public {
-        ReputationRegistryPlus impl = new ReputationRegistryPlus();
+        ReputationRegistrySource impl = new ReputationRegistrySource();
         vm.expectRevert(InvalidGatewayAdapter.selector);
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                ReputationRegistryPlus.initialize,
+                ReputationRegistrySource.initialize,
                 (owner, address(localReg), address(0), settlement)
             )
         );
     }
 
     function test_Initialize_ZeroSettlement_Reverts() public {
-        ReputationRegistryPlus impl = new ReputationRegistryPlus();
+        ReputationRegistrySource impl = new ReputationRegistrySource();
         vm.expectRevert(InvalidSettlementRegistry.selector);
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                ReputationRegistryPlus.initialize,
+                ReputationRegistrySource.initialize,
                 (owner, address(localReg), address(gateway), address(0))
             )
         );
     }
 
     function test_Initialize_ZeroLocalRegistry_Reverts() public {
-        ReputationRegistryPlus impl = new ReputationRegistryPlus();
+        ReputationRegistrySource impl = new ReputationRegistrySource();
         vm.expectRevert("zero local registry");
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                ReputationRegistryPlus.initialize, (owner, address(0), address(gateway), settlement)
+                ReputationRegistrySource.initialize,
+                (owner, address(0), address(gateway), settlement)
             )
         );
     }
 
     function test_Initialize_DefaultsDisabled() public {
-        ReputationRegistryPlus impl = new ReputationRegistryPlus();
+        ReputationRegistrySource impl = new ReputationRegistrySource();
         ERC1967Proxy proxy = new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                ReputationRegistryPlus.initialize,
+                ReputationRegistrySource.initialize,
                 (owner, address(localReg), address(gateway), settlement)
             )
         );
-        ReputationRegistryPlus fresh = ReputationRegistryPlus(address(proxy));
+        ReputationRegistrySource fresh = ReputationRegistrySource(address(proxy));
         assertFalse(fresh.propagationEnabled());
     }
 
@@ -179,7 +180,7 @@ contract ReputationRegistryPlusTest is Test {
 
     function test_GiveFeedback_FirstFeedback_EmitsEvent() public {
         vm.expectEmit(true, false, false, true);
-        emit ReputationRegistryPlus.ReputationPropagated(AGENT_ID, 1, 80, block.number);
+        emit ReputationRegistrySource.ReputationPropagated(AGENT_ID, 1, 80, block.number);
 
         _giveFeedbackWithFee(80);
     }

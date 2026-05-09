@@ -10,7 +10,7 @@ import {
 contract DeployReputation is Script {
     function run() external {
         address deployer = msg.sender;
-        address uaiRegistryProxy = vm.envAddress("UAI_REGISTRY_PROXY");
+        address agentRegistryProxy = vm.envAddress("AGENT_REGISTRY_PROXY");
         address reporter = vm.envAddress("INITIAL_REPORTER");
         address slasher = vm.envAddress("INITIAL_SLASHER");
 
@@ -22,7 +22,7 @@ contract DeployReputation is Script {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(impl),
             deployer,
-            abi.encodeCall(ReputationRegistry.initialize, (deployer, deployer, uaiRegistryProxy))
+            abi.encodeCall(ReputationRegistry.initialize, (deployer, deployer, agentRegistryProxy))
         );
         console.log("Proxy:", address(proxy));
 

@@ -5,29 +5,29 @@ import {
     AgentNotRegistered,
     AgentCardHashRequired,
     UnsupportedProofType,
-    ShadowAlreadyClaimed,
-    ShadowNotFound,
-    ShadowLinkExpired,
-    ShadowLinkNonceUsed,
-    InvalidShadowSignature,
+    BindingAlreadyClaimed,
+    BindingNotFound,
+    BindExpired,
+    BindNonceUsed,
+    InvalidBindSignature,
     InvalidChainIdentifier,
     InvalidRegistryAddress,
     IdentityNotTransferable,
-    MaxShadowsExceeded
+    MaxBindingsExceeded
 } from "../libraries/Errors.sol";
 
-/// @title IUAIRegistry
+/// @title IAgentRegistry
 /// @notice ERC-8004-compatible Universal Agent Identity Registry on Push Chain.
 ///         Uses UEA addresses as canonical agent identifiers.
 ///         agentId = uint256(uint160(ueaAddress)) — deterministic, collision-free.
 ///         Non-transferable (soulbound).
-interface IUAIRegistry {
+interface IAgentRegistry {
     // ──────────────────────────────────────────────
     //  Types
     // ──────────────────────────────────────────────
 
-    /// @notice Proof mechanism used to verify shadow ownership.
-    enum ShadowProofType {
+    /// @notice Proof mechanism used to verify binding ownership.
+    enum BindProofType {
         OWNER_KEY_SIGNED
     }
 
@@ -43,29 +43,29 @@ interface IUAIRegistry {
         bool nativeToPush;
     }
 
-    /// @notice Stored link between a canonical agent and a per-chain shadow identity.
-    struct ShadowEntry {
+    /// @notice Stored link between a canonical agent and a per-chain bound identity.
+    struct BindEntry {
         string chainNamespace;
         string chainId;
         address registryAddress;
-        uint256 shadowAgentId;
-        ShadowProofType proofType;
+        uint256 boundAgentId;
+        BindProofType proofType;
         bool verified;
         uint64 linkedAt;
     }
 
-    /// @notice Input payload for creating a shadow link.
+    /// @notice Input payload for creating a binding.
     /// @dev `proofData` encoding depends on the proof type:
     ///      - OWNER_KEY_SIGNED (ECDSA): raw 65-byte signature (r ‖ s ‖ v).
     ///      - OWNER_KEY_SIGNED (ERC-1271): `abi.encodePacked(signerAddress, signatureBytes)`
     ///        where `signerAddress` is the 20-byte contract address that implements ERC-1271,
     ///        and `signatureBytes` is the contract-specific signature passed to `isValidSignature`.
-    struct ShadowLinkRequest {
+    struct BindRequest {
         string chainNamespace;
         string chainId;
         address registryAddress;
-        uint256 shadowAgentId;
-        ShadowProofType proofType;
+        uint256 boundAgentId;
+        BindProofType proofType;
         bytes proofData;
         uint256 nonce;
         uint256 deadline;
@@ -92,19 +92,19 @@ interface IUAIRegistry {
     /// @notice Emitted when an agent's card hash is updated (via setAgentCardHash or re-registration).
     event AgentCardHashUpdated(uint256 indexed agentId, bytes32 newHash);
 
-    /// @notice Emitted when a shadow identity is linked to a canonical agent.
-    event ShadowLinked(
+    /// @notice Emitted when a per-chain identity is bound to a canonical agent.
+    event AgentBound(
         uint256 indexed agentId,
         string chainNamespace,
         string chainId,
         address registryAddress,
-        uint256 shadowAgentId,
-        ShadowProofType proofType,
+        uint256 boundAgentId,
+        BindProofType proofType,
         bool verified
     );
 
-    /// @notice Emitted when a shadow identity is unlinked from a canonical agent.
-    event ShadowUnlinked(
+    /// @notice Emitted when a per-chain identity is unbound from a canonical agent.
+    event AgentUnbound(
         uint256 indexed agentId, string chainNamespace, string chainId, address registryAddress
     );
 
@@ -136,24 +136,24 @@ interface IUAIRegistry {
     ) external;
 
     // ──────────────────────────────────────────────
-    //  Shadow Linking
+    //  Binding
     // ──────────────────────────────────────────────
 
-    /// @notice Link a per-chain ERC-8004 agent identity to the caller's canonical agent.
-    /// @dev Only one shadow per (chainNamespace, chainId, registryAddress) tuple is
-    ///      allowed per agent. Linking a second shadow from the same registry requires
-    ///      unlinking the first. This constraint exists because the reverse-lookup index
-    ///      keys on the chain+registry tuple without the shadowAgentId.
-    /// @param req Shadow link request containing chain identifiers, proof, nonce, and deadline.
-    function linkShadow(
-        ShadowLinkRequest calldata req
+    /// @notice Bind a per-chain ERC-8004 agent identity to the caller's canonical agent.
+    /// @dev Only one binding per (chainNamespace, chainId, registryAddress) tuple is
+    ///      allowed per agent. Binding a second entry from the same registry requires
+    ///      unbinding the first. This constraint exists because the reverse-lookup index
+    ///      keys on the chain+registry tuple without the boundAgentId.
+    /// @param req Bind request containing chain identifiers, proof, nonce, and deadline.
+    function bind(
+        BindRequest calldata req
     ) external;
 
-    /// @notice Remove a shadow link from the caller's canonical agent.
-    /// @param chainNamespace CAIP-2 namespace of the shadow chain (e.g. "eip155").
-    /// @param chainId CAIP-2 chain ID of the shadow chain (e.g. "1").
-    /// @param registryAddress ERC-8004 registry address on the shadow chain.
-    function unlinkShadow(
+    /// @notice Remove a binding from the caller's canonical agent.
+    /// @param chainNamespace CAIP-2 namespace of the bound chain (e.g. "eip155").
+    /// @param chainId CAIP-2 chain ID of the bound chain (e.g. "1").
+    /// @param registryAddress ERC-8004 registry address on the bound chain.
+    function unbind(
         string calldata chainNamespace,
         string calldata chainId,
         address registryAddress
@@ -185,7 +185,7 @@ interface IUAIRegistry {
     ) external view returns (string memory);
 
     // ──────────────────────────────────────────────
-    //  Reads — UAIRegistry-specific
+    //  Reads — AgentRegistry-specific
     // ──────────────────────────────────────────────
 
     /// @notice Return the canonical UEA address for an agent ID.
@@ -202,25 +202,25 @@ interface IUAIRegistry {
         address uea
     ) external view returns (uint256);
 
-    /// @notice Return all shadow entries linked to an agent.
+    /// @notice Return all bind entries linked to an agent.
     /// @param agentId The agent identifier.
-    /// @return Array of shadow entries (empty if none linked).
-    function getShadows(
+    /// @return Array of bind entries (empty if none linked).
+    function getBindings(
         uint256 agentId
-    ) external view returns (ShadowEntry[] memory);
+    ) external view returns (BindEntry[] memory);
 
-    /// @notice Resolve a shadow identity to its canonical UEA.
-    /// @param chainNamespace CAIP-2 namespace of the shadow chain.
-    /// @param chainId CAIP-2 chain ID of the shadow chain.
-    /// @param registryAddress ERC-8004 registry on the shadow chain.
-    /// @param shadowAgentId Agent ID on the shadow chain registry.
+    /// @notice Resolve a bound identity to its canonical UEA.
+    /// @param chainNamespace CAIP-2 namespace of the bound chain.
+    /// @param chainId CAIP-2 chain ID of the bound chain.
+    /// @param registryAddress ERC-8004 registry on the bound chain.
+    /// @param boundAgentId Agent ID on the bound chain registry.
     /// @return canonical The canonical UEA address (address(0) if not linked).
-    /// @return verified Whether the shadow link has been cryptographically verified.
-    function canonicalUEAFromShadow(
+    /// @return verified Whether the binding has been cryptographically verified.
+    function canonicalUEAFromBinding(
         string calldata chainNamespace,
         string calldata chainId,
         address registryAddress,
-        uint256 shadowAgentId
+        uint256 boundAgentId
     ) external view returns (address canonical, bool verified);
 
     /// @notice Check whether an agent ID is registered.

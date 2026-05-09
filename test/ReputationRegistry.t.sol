@@ -2,8 +2,8 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {UAIRegistry} from "src/UAIRegistry.sol";
-import {IUAIRegistry} from "src/interfaces/IUAIRegistry.sol";
+import {AgentRegistry} from "src/AgentRegistry.sol";
+import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
 import {ReputationRegistry} from "src/ReputationRegistry.sol";
 import {IReputationRegistry} from "src/IReputationRegistry.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
@@ -14,11 +14,11 @@ import {
     InvalidSeverity,
     InvalidChainIdentifierReputation,
     InvalidRegistryAddressReputation,
-    ShadowNotLinked,
+    BindingNotLinked,
     BatchTooLarge,
     EmptyBatch,
     InvalidDecimals,
-    InvalidUAIRegistryAddress,
+    InvalidAgentRegistryAddress,
     MaxSlashRecordsExceeded,
     SummaryValueOutOfRange,
     TooManyChainKeys,
@@ -30,7 +30,7 @@ import {
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract ReputationRegistryTest is Test {
-    UAIRegistry public uaiRegistry;
+    AgentRegistry public agentRegistry;
     ReputationRegistry public repRegistry;
     MockUEAFactory public factory;
 
@@ -44,16 +44,16 @@ contract ReputationRegistryTest is Test {
     uint256 public ueaUserKey;
     uint256 public agentId;
 
-    address constant SHADOW_REGISTRY_ETH = address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
-    address constant SHADOW_REGISTRY_BASE = address(0x8004b269Fb4A3325136eB29FA0ceb6d2E539b543);
-    address constant SHADOW_REGISTRY_ARB = address(0x8004c369fB4a3325136eB29Fa0ceB6d2e539C654);
+    address constant REGISTRY_ETH = address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
+    address constant REGISTRY_BASE = address(0x8004b269Fb4A3325136eB29FA0ceb6d2E539b543);
+    address constant REGISTRY_ARB = address(0x8004c369fB4a3325136eB29Fa0ceB6d2e539C654);
 
     bytes32 constant CARD_HASH = keccak256("agent-card");
     string constant AGENT_URI = "ipfs://QmTest";
 
-    bytes32 public constant SHADOW_LINK_TYPEHASH = keccak256(
-        "ShadowLink(address canonicalUEA,string chainNamespace,string chainId,"
-        "address registryAddress,uint256 shadowAgentId,uint256 nonce,uint256 deadline)"
+    bytes32 public constant BIND_TYPEHASH = keccak256(
+        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
     function setUp() public {
@@ -67,17 +67,17 @@ contract ReputationRegistryTest is Test {
             })
         );
 
-        UAIRegistry uaiImpl = new UAIRegistry(factory);
-        TransparentUpgradeableProxy uaiProxy = new TransparentUpgradeableProxy(
-            address(uaiImpl), admin, abi.encodeCall(UAIRegistry.initialize, (admin, pauser))
+        AgentRegistry agentImpl = new AgentRegistry(factory);
+        TransparentUpgradeableProxy agentProxy = new TransparentUpgradeableProxy(
+            address(agentImpl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
         );
-        uaiRegistry = UAIRegistry(address(uaiProxy));
+        agentRegistry = AgentRegistry(address(agentProxy));
 
         ReputationRegistry repImpl = new ReputationRegistry();
         TransparentUpgradeableProxy repProxy = new TransparentUpgradeableProxy(
             address(repImpl),
             admin,
-            abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(uaiRegistry)))
+            abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(agentRegistry)))
         );
         repRegistry = ReputationRegistry(address(repProxy));
 
@@ -87,53 +87,53 @@ contract ReputationRegistryTest is Test {
         vm.stopPrank();
 
         vm.prank(ueaUser);
-        agentId = uaiRegistry.register(AGENT_URI, CARD_HASH);
+        agentId = agentRegistry.register(AGENT_URI, CARD_HASH);
 
-        _linkShadow("eip155", "1", SHADOW_REGISTRY_ETH, 42, 1);
-        _linkShadow("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 2);
-        _linkShadow("eip155", "42161", SHADOW_REGISTRY_ARB, 8, 3);
+        _linkBinding("eip155", "1", REGISTRY_ETH, 42, 1);
+        _linkBinding("eip155", "8453", REGISTRY_BASE, 17, 2);
+        _linkBinding("eip155", "42161", REGISTRY_ARB, 8, 3);
     }
 
     // ──────────────────────────────────────────────
     //  Helpers
     // ──────────────────────────────────────────────
 
-    function _linkShadow(
+    function _linkBinding(
         string memory chainNs,
         string memory chainId,
         address registryAddr,
-        uint256 shadowAgentId,
+        uint256 boundAgentId,
         uint256 nonce
     ) internal {
-        bytes memory sig = _signShadowLink(
+        bytes memory sig = _signBind(
             ueaUserKey,
             ueaUser,
             chainNs,
             chainId,
             registryAddr,
-            shadowAgentId,
+            boundAgentId,
             nonce,
             block.timestamp + 1 hours
         );
 
-        IUAIRegistry.ShadowLinkRequest memory req = IUAIRegistry.ShadowLinkRequest({
+        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
             chainNamespace: chainNs,
             chainId: chainId,
             registryAddress: registryAddr,
-            shadowAgentId: shadowAgentId,
-            proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+            boundAgentId: boundAgentId,
+            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: sig,
             nonce: nonce,
             deadline: block.timestamp + 1 hours
         });
 
         vm.prank(ueaUser);
-        uaiRegistry.linkShadow(req);
+        agentRegistry.bind(req);
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
         (, string memory name, string memory version, uint256 cId, address vc,,) =
-            uaiRegistry.eip712Domain();
+            agentRegistry.eip712Domain();
         return keccak256(
             abi.encode(
                 keccak256(
@@ -154,46 +154,46 @@ contract ReputationRegistryTest is Test {
         string chainNs;
         string chainId;
         address registryAddr;
-        uint256 shadowAgentId;
+        uint256 boundAgentId;
         uint256 nonce;
         uint256 deadline;
     }
 
-    function _signShadowLink(
+    function _signBind(
         uint256 signerKey,
         address canonicalUEA,
         string memory chainNs,
         string memory chainId,
         address registryAddr,
-        uint256 shadowAgentId,
+        uint256 boundAgentId,
         uint256 nonce,
         uint256 deadline
     ) internal view returns (bytes memory) {
-        return _signShadowLinkStruct(
+        return _signBindStruct(
             SignParams(
                 signerKey,
                 canonicalUEA,
                 chainNs,
                 chainId,
                 registryAddr,
-                shadowAgentId,
+                boundAgentId,
                 nonce,
                 deadline
             )
         );
     }
 
-    function _signShadowLinkStruct(
+    function _signBindStruct(
         SignParams memory p
     ) internal view returns (bytes memory) {
         bytes32 structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 p.canonicalUEA,
                 keccak256(bytes(p.chainNs)),
                 keccak256(bytes(p.chainId)),
                 p.registryAddr,
-                p.shadowAgentId,
+                p.boundAgentId,
                 p.nonce,
                 p.deadline
             )
@@ -212,8 +212,8 @@ contract ReputationRegistryTest is Test {
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "1",
-            registryAddress: SHADOW_REGISTRY_ETH,
-            shadowAgentId: 42,
+            registryAddress: REGISTRY_ETH,
+            boundAgentId: 42,
             feedbackCount: 200,
             summaryValue: 92 * 1e18,
             valueDecimals: 18,
@@ -227,7 +227,7 @@ contract ReputationRegistryTest is Test {
         string memory chainNs,
         string memory chainId,
         address registryAddr,
-        uint256 shadowId,
+        uint256 boundId,
         uint64 feedbackCount,
         int128 summaryValue,
         uint256 sourceBlock
@@ -238,7 +238,7 @@ contract ReputationRegistryTest is Test {
                 chainNamespace: chainNs,
                 chainId: chainId,
                 registryAddress: registryAddr,
-                shadowAgentId: shadowId,
+                boundAgentId: boundId,
                 feedbackCount: feedbackCount,
                 summaryValue: summaryValue,
                 valueDecimals: 18,
@@ -300,13 +300,13 @@ contract ReputationRegistryTest is Test {
         repRegistry.submitReputation(sub);
     }
 
-    function test_SubmitReputation_ShadowNotLinked_Reverts() public {
+    function test_SubmitReputation_BindingNotLinked_Reverts() public {
         IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.chainNamespace = "eip155";
         sub.chainId = "137";
 
         vm.prank(reporter);
-        vm.expectRevert(abi.encodeWithSelector(ShadowNotLinked.selector, agentId, "eip155", "137"));
+        vm.expectRevert(abi.encodeWithSelector(BindingNotLinked.selector, agentId, "eip155", "137"));
         repRegistry.submitReputation(sub);
     }
 
@@ -408,26 +408,19 @@ contract ReputationRegistryTest is Test {
             })
         );
         vm.prank(ueaUser2);
-        uint256 agentId2 = uaiRegistry.register("ipfs://test2", CARD_HASH);
+        uint256 agentId2 = agentRegistry.register("ipfs://test2", CARD_HASH);
 
-        bytes memory sig2 = _signShadowLink(
-            ueaUser2Key,
-            ueaUser2,
-            "eip155",
-            "1",
-            SHADOW_REGISTRY_ETH,
-            99,
-            1,
-            block.timestamp + 1 hours
+        bytes memory sig2 = _signBind(
+            ueaUser2Key, ueaUser2, "eip155", "1", REGISTRY_ETH, 99, 1, block.timestamp + 1 hours
         );
         vm.prank(ueaUser2);
-        uaiRegistry.linkShadow(
-            IUAIRegistry.ShadowLinkRequest({
+        agentRegistry.bind(
+            IAgentRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY_ETH,
-                shadowAgentId: 99,
-                proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 99,
+                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: sig2,
                 nonce: 1,
                 deadline: block.timestamp + 1 hours
@@ -441,8 +434,8 @@ contract ReputationRegistryTest is Test {
             agentId: agentId2,
             chainNamespace: "eip155",
             chainId: "1",
-            registryAddress: SHADOW_REGISTRY_ETH,
-            shadowAgentId: 99,
+            registryAddress: REGISTRY_ETH,
+            boundAgentId: 99,
             feedbackCount: 50,
             summaryValue: 80 * 1e18,
             valueDecimals: 18,
@@ -466,8 +459,8 @@ contract ReputationRegistryTest is Test {
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "1",
-            registryAddress: SHADOW_REGISTRY_ETH,
-            shadowAgentId: 42,
+            registryAddress: REGISTRY_ETH,
+            boundAgentId: 42,
             feedbackCount: 200,
             summaryValue: 92 * 1e18,
             valueDecimals: 18,
@@ -479,8 +472,8 @@ contract ReputationRegistryTest is Test {
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "8453",
-            registryAddress: SHADOW_REGISTRY_BASE,
-            shadowAgentId: 17,
+            registryAddress: REGISTRY_BASE,
+            boundAgentId: 17,
             feedbackCount: 150,
             summaryValue: 88 * 1e18,
             valueDecimals: 18,
@@ -492,8 +485,8 @@ contract ReputationRegistryTest is Test {
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "42161",
-            registryAddress: SHADOW_REGISTRY_ARB,
-            shadowAgentId: 8,
+            registryAddress: REGISTRY_ARB,
+            boundAgentId: 8,
             feedbackCount: 50,
             summaryValue: 95 * 1e18,
             valueDecimals: 18,
@@ -534,7 +527,7 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Aggregation_SingleChain_MatchesSubmission() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 200, 92 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 200, 92 * 1e18, 1000);
 
         IReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
@@ -544,8 +537,8 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Aggregation_MultipleChains_WeightedAvg() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 100, 60 * 1e18, 2000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 100, 60 * 1e18, 2000);
 
         IReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
@@ -561,8 +554,8 @@ contract ReputationRegistryTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY_ETH,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: 100,
                 summaryValue: 90 * 1e2,
                 valueDecimals: 2,
@@ -581,7 +574,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Aggregation_NegativeValue_ClampsToZero() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, -50 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, -50 * 1e18, 1000);
 
         uint256 score = repRegistry.getReputationScore(agentId);
         // Negative → baseScore = 0, still gets diversity bonus (500)
@@ -589,8 +582,8 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Aggregation_ChainCount_Correct() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 50, 80 * 1e18, 2000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 50, 80 * 1e18, 2000);
 
         IReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
@@ -598,8 +591,8 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Reaggregate_RemovesUnlinkedChain() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 100, 80 * 1e18, 2000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 100, 80 * 1e18, 2000);
 
         IReputationRegistry.AggregatedReputation memory aggBefore =
             repRegistry.getAggregatedReputation(agentId);
@@ -607,7 +600,7 @@ contract ReputationRegistryTest is Test {
         assertEq(aggBefore.totalFeedbackCount, 300);
 
         vm.prank(ueaUser);
-        uaiRegistry.unlinkShadow("eip155", "8453", SHADOW_REGISTRY_BASE);
+        agentRegistry.unbind("eip155", "8453", REGISTRY_BASE);
 
         repRegistry.reaggregate(agentId);
 
@@ -618,7 +611,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Reaggregate_AnyoneCanCall() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         vm.prank(nobody);
         repRegistry.reaggregate(agentId);
@@ -635,9 +628,9 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Score_PerfectAgent_HighScore() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 1024, 100 * 1e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 1024, 100 * 1e18, 2000);
-        _submitForChain("eip155", "42161", SHADOW_REGISTRY_ARB, 8, 1024, 100 * 1e18, 3000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 1024, 100 * 1e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 1024, 100 * 1e18, 2000);
+        _submitForChain("eip155", "42161", REGISTRY_ARB, 8, 1024, 100 * 1e18, 3000);
 
         uint256 score = repRegistry.getReputationScore(agentId);
         // 3072 total feedback → log2(3072)=11 → volumeMultiplier capped at 10000
@@ -650,7 +643,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Score_NewAgent_LowVolume() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 1, 100 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 1, 100 * 1e18, 1000);
 
         uint256 score = repRegistry.getReputationScore(agentId);
         // 1 feedback → log2(1)=0 → volumeMultiplier = 5000
@@ -662,11 +655,11 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Score_MultiChain_DiversityBonus() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 1, 100 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 1, 100 * 1e18, 1000);
 
         uint256 scoreOneChain = repRegistry.getReputationScore(agentId);
 
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 1, 100 * 1e18, 2000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 1, 100 * 1e18, 2000);
 
         uint256 scoreTwoChains = repRegistry.getReputationScore(agentId);
 
@@ -677,9 +670,9 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Score_DiversityBonus_CappedAt2000() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 1, 100 * 1e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 1, 100 * 1e18, 2000);
-        _submitForChain("eip155", "42161", SHADOW_REGISTRY_ARB, 8, 1, 100 * 1e18, 3000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 1, 100 * 1e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 1, 100 * 1e18, 2000);
+        _submitForChain("eip155", "42161", REGISTRY_ARB, 8, 1, 100 * 1e18, 3000);
 
         uint256 scoreThree = repRegistry.getReputationScore(agentId);
 
@@ -691,7 +684,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Score_SlashReduces() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         uint256 scoreBefore = repRegistry.getReputationScore(agentId);
 
@@ -704,7 +697,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Score_HeavySlash_ClampsToZero() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 1, 50 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 1, 50 * 1e18, 1000);
 
         uint256 scoreBefore = repRegistry.getReputationScore(agentId);
         assertGt(scoreBefore, 0);
@@ -721,7 +714,7 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Slash_ValidSlasher_Records() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         vm.prank(slasher);
         repRegistry.slash(agentId, "eip155", "1", "fraud", keccak256("proof"), 2000);
@@ -760,7 +753,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Slash_CumulativePenalty() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         uint256 scoreBefore = repRegistry.getReputationScore(agentId);
 
@@ -789,7 +782,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_GetChainReputation_Exists() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         IReputationRegistry.ChainReputation memory cr =
             repRegistry.getChainReputation(agentId, "eip155", "1");
@@ -805,9 +798,9 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_GetAllChainReputations_MultipleChains() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 150, 88 * 1e18, 2000);
-        _submitForChain("eip155", "42161", SHADOW_REGISTRY_ARB, 8, 50, 95 * 1e18, 3000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 150, 88 * 1e18, 2000);
+        _submitForChain("eip155", "42161", REGISTRY_ARB, 8, 50, 95 * 1e18, 3000);
 
         IReputationRegistry.ChainReputation[] memory all =
             repRegistry.getAllChainReputations(agentId);
@@ -815,7 +808,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_GetReputationScore_MatchesAggregate() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         uint256 score = repRegistry.getReputationScore(agentId);
         IReputationRegistry.AggregatedReputation memory agg =
@@ -824,13 +817,13 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_IsFresh_WithinAge_True() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         assertTrue(repRegistry.isFresh(agentId, 6 hours));
     }
 
     function test_IsFresh_Expired_False() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         vm.warp(block.timestamp + 7 hours);
         assertFalse(repRegistry.isFresh(agentId, 6 hours));
@@ -856,25 +849,25 @@ contract ReputationRegistryTest is Test {
     //  Admin Tests
     // ──────────────────────────────────────────────
 
-    function test_SetUAIRegistry_Admin_Updates() public {
-        address newAddr = makeAddr("newUAIRegistry");
+    function test_SetAgentRegistry_Admin_Updates() public {
+        address newAddr = makeAddr("newAgentRegistry");
 
         vm.prank(admin);
-        repRegistry.setUAIRegistry(newAddr);
+        repRegistry.setAgentRegistry(newAddr);
 
-        assertEq(repRegistry.getUAIRegistry(), newAddr);
+        assertEq(repRegistry.getAgentRegistry(), newAddr);
     }
 
-    function test_SetUAIRegistry_NonAdmin_Reverts() public {
+    function test_SetAgentRegistry_NonAdmin_Reverts() public {
         vm.prank(nobody);
         vm.expectRevert();
-        repRegistry.setUAIRegistry(makeAddr("newUAIRegistry"));
+        repRegistry.setAgentRegistry(makeAddr("newAgentRegistry"));
     }
 
-    function test_SetUAIRegistry_ZeroAddr_Reverts() public {
+    function test_SetAgentRegistry_ZeroAddr_Reverts() public {
         vm.prank(admin);
-        vm.expectRevert(InvalidUAIRegistryAddress.selector);
-        repRegistry.setUAIRegistry(address(0));
+        vm.expectRevert(InvalidAgentRegistryAddress.selector);
+        repRegistry.setAgentRegistry(address(0));
     }
 
     function test_Pause_Unpause_WorksForPauser() public {
@@ -940,36 +933,36 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_SubmitReputation_TooManyChainKeys_Reverts() public {
-        // setUp already links 3 shadows. Fill to 64 shadows with data.
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 10, 50 * 1e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 10, 50 * 1e18, 1000);
-        _submitForChain("eip155", "42161", SHADOW_REGISTRY_ARB, 8, 10, 50 * 1e18, 1000);
+        // setUp already links 3 bindings. Fill to 64 bindings with data.
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 10, 50 * 1e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 10, 50 * 1e18, 1000);
+        _submitForChain("eip155", "42161", REGISTRY_ARB, 8, 10, 50 * 1e18, 1000);
         for (uint256 i = 4; i <= 64; i++) {
             string memory cid = vm.toString(i);
-            address shadowReg = address(uint160(0xBEEF0000 + i));
-            _linkShadow("eip155", cid, shadowReg, i, i + 100);
-            _submitForChain("eip155", cid, shadowReg, i, 10, 50 * 1e18, 1000);
+            address chainReg = address(uint160(0xBEEF0000 + i));
+            _linkBinding("eip155", cid, chainReg, i, i + 100);
+            _submitForChain("eip155", cid, chainReg, i, 10, 50 * 1e18, 1000);
         }
 
-        // Now unlink one shadow to free a slot in UAIRegistry,
-        // then link a new shadow on a different chain.
-        // The chain key from the old shadow still persists in
+        // Now unbind one binding to free a slot in AgentRegistry,
+        // then bind a new binding on a different chain.
+        // The chain key from the old binding still persists in
         // ReputationRegistry, so we now have 64 chain keys and
         // the 65th will exceed the cap.
         vm.prank(ueaUser);
-        uaiRegistry.unlinkShadow("eip155", "4", address(uint160(0xBEEF0004)));
+        agentRegistry.unbind("eip155", "4", address(uint160(0xBEEF0004)));
 
         string memory cid65 = "65";
-        address shadowReg65 = address(uint160(0xBEEF0041));
-        _linkShadow("eip155", cid65, shadowReg65, 65, 200);
+        address chainReg65 = address(uint160(0xBEEF0041));
+        _linkBinding("eip155", cid65, chainReg65, 65, 200);
 
         IReputationRegistry.ReputationSubmission memory sub =
             IReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: cid65,
-                registryAddress: shadowReg65,
-                shadowAgentId: 65,
+                registryAddress: chainReg65,
+                boundAgentId: 65,
                 feedbackCount: 10,
                 summaryValue: 50 * 1e18,
                 valueDecimals: 18,
@@ -987,7 +980,7 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Reaggregate_WhenPaused_Reverts() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         vm.prank(pauser);
         repRegistry.pause();
@@ -1001,7 +994,7 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Slash_UpdatesLastAggregated() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         uint64 tsBeforeSlash = repRegistry.getAggregatedReputation(agentId).lastAggregated;
 
@@ -1026,7 +1019,7 @@ contract ReputationRegistryTest is Test {
             address(impl),
             admin,
             abi.encodeCall(
-                ReputationRegistry.initialize, (address(0), pauser, address(uaiRegistry))
+                ReputationRegistry.initialize, (address(0), pauser, address(agentRegistry))
             )
         );
     }
@@ -1037,7 +1030,9 @@ contract ReputationRegistryTest is Test {
         new TransparentUpgradeableProxy(
             address(impl),
             admin,
-            abi.encodeCall(ReputationRegistry.initialize, (admin, address(0), address(uaiRegistry)))
+            abi.encodeCall(
+                ReputationRegistry.initialize, (admin, address(0), address(agentRegistry))
+            )
         );
     }
 
@@ -1061,11 +1056,11 @@ contract ReputationRegistryTest is Test {
     //  Branch Coverage Tests
     // ──────────────────────────────────────────────
 
-    function test_Initialize_ZeroUAIRegistry_Reverts() public {
+    function test_Initialize_ZeroAgentRegistry_Reverts() public {
         ReputationRegistry impl = new ReputationRegistry();
         bytes memory initData =
             abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(0)));
-        vm.expectRevert(InvalidUAIRegistryAddress.selector);
+        vm.expectRevert(InvalidAgentRegistryAddress.selector);
         new TransparentUpgradeableProxy(address(impl), admin, initData);
     }
 
@@ -1108,8 +1103,8 @@ contract ReputationRegistryTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY_ETH,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: 0,
                 summaryValue: 0,
                 valueDecimals: 18,
@@ -1127,16 +1122,16 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Reaggregate_SwapsMiddleChainKey() public {
-        _submitForChain("eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90e18, 1000);
-        _submitForChain("eip155", "8453", SHADOW_REGISTRY_BASE, 17, 200, 85e18, 2000);
-        _submitForChain("eip155", "42161", SHADOW_REGISTRY_ARB, 8, 150, 88e18, 3000);
+        _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90e18, 1000);
+        _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 200, 85e18, 2000);
+        _submitForChain("eip155", "42161", REGISTRY_ARB, 8, 150, 88e18, 3000);
 
         IReputationRegistry.AggregatedReputation memory aggBefore =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(aggBefore.chainCount, 3);
 
         vm.prank(ueaUser);
-        uaiRegistry.unlinkShadow("eip155", "1", SHADOW_REGISTRY_ETH);
+        agentRegistry.unbind("eip155", "1", REGISTRY_ETH);
 
         repRegistry.reaggregate(agentId);
 
@@ -1156,9 +1151,9 @@ contract ReputationRegistryTest is Test {
 
     function test_StorageSlot_MatchesERC7201Formula() public pure {
         bytes32 expected = keccak256(
-            abi.encode(uint256(keccak256("reputationregistry.storage")) - 1)
+            abi.encode(uint256(keccak256("agentgraph.reputation.storage")) - 1)
         ) & ~bytes32(uint256(0xff));
 
-        assertEq(expected, 0xe070097f04227be86f6bce14fa1fa3a34d6ed0171b77fb88539672b7cff99400);
+        assertEq(expected, 0xb67861f8610ba7b280c2ed92ad7bea4b114932d67697dbe598601e1297e05100);
     }
 }

@@ -2,7 +2,7 @@
 
 Cross-Chain Agent Reputation Aggregator on Push Chain.
 
-ReputationRegistry collects per-chain reputation data for AI agents and computes a single, normalized reputation score (0-10,000 basis points) that reflects an agent's performance across every chain it operates on. It works alongside UAIRegistry: where UAIRegistry answers "who is this agent?", ReputationRegistry answers "how trustworthy is this agent?"
+ReputationRegistry collects per-chain reputation data for AI agents and computes a single, normalized reputation score (0-10,000 basis points) that reflects an agent's performance across every chain it operates on. It works alongside AgentRegistry: where AgentRegistry answers "who is this agent?", ReputationRegistry answers "how trustworthy is this agent?"
 
 ---
 
@@ -36,7 +36,7 @@ ReputationRegistry acts as a cross-chain reputation aggregator that:
                    |  (aggregated score)|
                    +--------+-----------+
                             |
-          reads shadow links from UAIRegistry
+          reads bindings from AgentRegistry
                             |
          +------------------+------------------+
          |                  |                  |
@@ -54,7 +54,7 @@ The flow:
 1. Per-chain ERC-8004 ReputationRegistryUpgradeable contracts accumulate local feedback.
 2. Authorized reporters (off-chain services or relayers) read per-chain reputation data.
 3. Reporters submit snapshots to ReputationRegistry on Push Chain.
-4. ReputationRegistry validates each submission against UAIRegistry shadow links (ensuring the agent actually has a linked identity on that chain).
+4. ReputationRegistry validates each submission against AgentRegistry bindings (ensuring the agent actually has a linked identity on that chain).
 5. ReputationRegistry normalizes, aggregates, and scores.
 
 ---
@@ -77,7 +77,7 @@ The score scales the base quality rating by `log2(totalFeedbackCount)`, ranging 
 
 ### Cross-Chain Slashing with Persistent Penalties
 
-ERC-8004 has no slashing mechanism. ReputationRegistry introduces `SLASHER_ROLE` with cumulative severity deductions that persist even if the associated shadow link is later removed. An agent cannot escape a slash by unlinking from the chain where the incident occurred. Up to 256 slash records are stored per agent with full provenance (chain, reason, evidence hash, timestamp, slasher address).
+ERC-8004 has no slashing mechanism. ReputationRegistry introduces `SLASHER_ROLE` with cumulative severity deductions that persist even if the associated binding is later removed. An agent cannot escape a slash by unbinding from the chain where the incident occurred. Up to 256 slash records are stored per agent with full provenance (chain, reason, evidence hash, timestamp, slasher address).
 
 ### Staleness Protection
 
@@ -95,7 +95,7 @@ ReputationRegistry tracks `positiveCount` and `negativeCount` alongside the `sum
 
 | Role | Purpose |
 |------|---------|
-| `DEFAULT_ADMIN_ROLE` | Grants/revokes roles. Updates UAIRegistry address. |
+| `DEFAULT_ADMIN_ROLE` | Grants/revokes roles. Updates AgentRegistry address. |
 | `REPORTER_ROLE` | Submits per-chain reputation snapshots. |
 | `SLASHER_ROLE` | Records slashing events against agents. |
 | `PAUSER_ROLE` | Pauses/unpauses the contract. |
@@ -108,11 +108,11 @@ A reporter submits a `ReputationSubmission` containing:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `agentId` | `uint256` | Canonical agent ID on UAIRegistry |
+| `agentId` | `uint256` | Canonical agent ID on AgentRegistry |
 | `chainNamespace` | `string` | CAIP-2 namespace (e.g., `"eip155"`) |
 | `chainId` | `string` | CAIP-2 chain ID (e.g., `"1"`) |
 | `registryAddress` | `address` | ERC-8004 registry address on the source chain |
-| `shadowAgentId` | `uint256` | Agent's ID on the source chain registry |
+| `boundAgentId` | `uint256` | Agent's ID on the source chain registry |
 | `feedbackCount` | `uint64` | Total number of feedback entries on that chain |
 | `summaryValue` | `int128` | Weighted average rating (signed, supports negative) |
 | `valueDecimals` | `uint8` | Decimal precision of `summaryValue` (max 18) |
@@ -127,8 +127,8 @@ Every submission goes through these checks:
 1. **Decimals**: `valueDecimals` must be <= 18.
 2. **Chain identifiers**: Neither `chainNamespace` nor `chainId` can be empty.
 3. **Registry address**: Cannot be `address(0)`.
-4. **Agent registration**: The `agentId` must be registered in UAIRegistry.
-5. **Shadow link validation**: The agent must have an active shadow link to the specified chain. The contract reads all shadows from UAIRegistry and checks that at least one matches the submitted `chainNamespace` and `chainId`.
+4. **Agent registration**: The `agentId` must be registered in AgentRegistry.
+5. **Binding validation**: The agent must have an active binding to the specified chain. The contract reads all bindings from AgentRegistry and checks that at least one matches the submitted `chainNamespace` and `chainId`.
 6. **Staleness protection**: If reputation data already exists for this agent+chain combination, the new submission's `sourceBlockNumber` must be strictly greater than the stored value. This prevents replay attacks and ensures data always moves forward.
 
 ### Data Storage
@@ -284,7 +284,7 @@ slash(agentId, chainNamespace, chainId, reason, evidenceHash, severityBps)
 - The `totalSlashSeverity` is incremented by `severityBps`.
 - The score is recomputed immediately.
 
-Slash records persist even if the associated shadow link is later removed. This prevents an agent from escaping negative history by unlinking and relinking.
+Slash records persist even if the associated binding is later removed. This prevents an agent from escaping negative history by unbinding and rebinding.
 
 ### Batch Submission
 
@@ -294,11 +294,11 @@ Reporters can submit up to 50 reputation snapshots in a single transaction via `
 
 The `reaggregate(agentId)` function is permissionless -- anyone can call it. It:
 
-1. Reads the agent's current shadow links from UAIRegistry.
-2. Iterates over stored chain keys and removes any that no longer have a corresponding shadow link. This handles the case where a shadow was unlinked via UAIRegistry but the reputation data hasn't been cleaned up yet.
+1. Reads the agent's current bindings from AgentRegistry.
+2. Iterates over stored chain keys and removes any that no longer have a corresponding binding. This handles the case where a binding was removed via AgentRegistry but the reputation data hasn't been cleaned up yet.
 3. Recomputes the aggregate and score.
 
-This ensures reputation data stays consistent with the current identity graph. If an agent unlinks from Ethereum, reaggregation removes Ethereum reputation data from the aggregate.
+This ensures reputation data stays consistent with the current identity graph. If an agent unbinds from Ethereum, reaggregation removes Ethereum reputation data from the aggregate.
 
 ### Freshness Checks
 
@@ -314,11 +314,11 @@ This returns `true` if the last aggregation was within `maxAge` seconds. Consume
 
 ## How ReputationRegistry Works with ERC-8004
 
-The relationship between ReputationRegistry and ERC-8004 mirrors how UAIRegistry relates to per-chain IdentityRegistries:
+The relationship between ReputationRegistry and ERC-8004 mirrors how AgentRegistry relates to per-chain IdentityRegistries:
 
 - **ERC-8004 per-chain**: Each chain's ReputationRegistryUpgradeable accumulates local feedback from users interacting with agents on that chain. This is the raw data source.
 - **Off-chain reporters**: Authorized services read per-chain reputation data (via events, view functions, or indexers) and format it into `ReputationSubmission` structs.
-- **ReputationRegistry on Push Chain**: Receives submissions, validates against UAIRegistry shadow links, normalizes, and aggregates.
+- **ReputationRegistry on Push Chain**: Receives submissions, validates against AgentRegistry bindings, normalizes, and aggregates.
 
 The dependency chain is:
 
@@ -326,22 +326,22 @@ The dependency chain is:
 ERC-8004 (per-chain)
     → reporters read local reputation data
         → submit to ReputationRegistry (Push Chain)
-            → validates against UAIRegistry shadow links
+            → validates against AgentRegistry bindings
                 → computes aggregated score
 ```
 
 ReputationRegistry never reads directly from per-chain contracts. It trusts authorized reporters to submit accurate snapshots. The trust model is:
 
 - **Reporters are trusted**: The `REPORTER_ROLE` is granted to vetted off-chain services. They are responsible for reading per-chain data accurately.
-- **Shadow links are verified**: ReputationRegistry validates that the agent actually has a linked identity on the submitted chain by querying UAIRegistry. This prevents reporters from submitting phantom reputation data for chains where the agent doesn't exist.
+- **Bindings are verified**: ReputationRegistry validates that the agent actually has a linked identity on the submitted chain by querying AgentRegistry. This prevents reporters from submitting phantom reputation data for chains where the agent doesn't exist.
 - **Staleness is enforced on-chain**: The `sourceBlockNumber` check ensures that old data cannot overwrite new data, regardless of reporter behavior.
-- **Slashing is independent**: `SLASHER_ROLE` is separate from `REPORTER_ROLE`. Slashing doesn't require a shadow link and persists through unlinks.
+- **Slashing is independent**: `SLASHER_ROLE` is separate from `REPORTER_ROLE`. Slashing doesn't require a binding and persists through unbinds.
 
 ---
 
 ## Real-World Example: Multi-Chain DeFi Agent
 
-Consider "YieldBot", an AI agent that optimizes yield farming across Ethereum, Base, and Arbitrum. It has been registered on UAIRegistry and linked shadows to all three chains.
+Consider "YieldBot", an AI agent that optimizes yield farming across Ethereum, Base, and Arbitrum. It has been registered on AgentRegistry and bound to all three chains.
 
 ### Step 1: Earning Reputation Per-Chain
 
@@ -362,7 +362,7 @@ repRegistry.submitReputation(ReputationSubmission({
     chainNamespace: "eip155",
     chainId: "1",
     registryAddress: 0xEthReputationRegistry...,
-    shadowAgentId: 17,
+    boundAgentId: 17,
     feedbackCount: 500,
     summaryValue: 92 * 1e18,
     valueDecimals: 18,
@@ -383,8 +383,8 @@ repRegistry.batchSubmitReputation(subs);
 ```
 
 The contract validates each submission:
-- Checks YieldBot is registered in UAIRegistry
-- Checks YieldBot has a shadow link to each chain (queries `UAIRegistry.getShadows()`)
+- Checks YieldBot is registered in AgentRegistry
+- Checks YieldBot has a binding to each chain (queries `AgentRegistry.getBindings()`)
 - Checks no stale block numbers
 - Stores per-chain reputation data
 - Reaggregates once (all three submissions are for the same agent)
@@ -489,7 +489,7 @@ repRegistry.submitReputation(ReputationSubmission({
     chainNamespace: "eip155",
     chainId: "1",
     registryAddress: 0xEthReputationRegistry...,
-    shadowAgentId: 17,
+    boundAgentId: 17,
     feedbackCount: 750,          // more feedback now
     summaryValue: 93 * 1e18,    // slightly improved
     valueDecimals: 18,
@@ -499,15 +499,15 @@ repRegistry.submitReputation(ReputationSubmission({
 }));
 ```
 
-### Step 7: Shadow Unlink and Reaggregation
+### Step 7: Unbind and Reaggregation
 
-If YieldBot stops operating on Arbitrum and the operator unlinks the Arbitrum shadow from UAIRegistry, anyone can call:
+If YieldBot stops operating on Arbitrum and the operator unbinds Arbitrum from AgentRegistry, anyone can call:
 
 ```solidity
 repRegistry.reaggregate(yieldBotAgentId);
 ```
 
-This detects that the Arbitrum shadow no longer exists, removes Arbitrum reputation data from the aggregate, and recomputes the score using only Ethereum and Base data. The slash record from Arbitrum remains -- it is not removed when the shadow is unlinked.
+This detects that the Arbitrum binding no longer exists, removes Arbitrum reputation data from the aggregate, and recomputes the score using only Ethereum and Base data. The slash record from Arbitrum remains -- it is not removed when the binding is removed.
 
 ---
 
@@ -516,7 +516,7 @@ This detects that the Arbitrum shadow no longer exists, removes Arbitrum reputat
 ReputationRegistry uses ERC-7201 namespaced storage at:
 
 ```
-STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("reputationregistry.storage")) - 1))
+STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("agentgraph.reputation.storage")) - 1))
                 & ~bytes32(uint256(0xff))
 ```
 
@@ -529,7 +529,7 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("reputationregistry.storag
 | `chainKeyExists` | `mapping(uint256 => mapping(bytes32 => bool))` | Existence flag |
 | `slashRecords` | `mapping(uint256 => SlashRecord[])` | Per-agent slash history |
 | `totalSlashSeverity` | `mapping(uint256 => uint256)` | Cumulative slash severity in bps |
-| `uaiRegistry` | `address` | Address of the UAIRegistry proxy |
+| `agentRegistry` | `address` | Address of the AgentRegistry proxy |
 
 ---
 
@@ -552,7 +552,7 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("reputationregistry.storag
 
 | Function | Access | Description |
 |----------|--------|-------------|
-| `reaggregate(agentId)` | Anyone | Force recompute. Removes data for unlinked shadows. |
+| `reaggregate(agentId)` | Anyone | Force recompute. Removes data for unlinked bindings. |
 
 ### Reads
 
@@ -565,13 +565,13 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("reputationregistry.storag
 | `getSlashRecords(agentId)` | All slash records for an agent. |
 | `isFresh(agentId, maxAge)` | Whether last aggregation is within `maxAge` seconds. |
 | `lastUpdated(agentId)` | Timestamp of last aggregation. |
-| `getUAIRegistry()` | Current UAIRegistry address. |
+| `getAgentRegistry()` | Current AgentRegistry address. |
 
 ### Admin
 
 | Function | Access | Description |
 |----------|--------|-------------|
-| `setUAIRegistry(newAddr)` | DEFAULT_ADMIN_ROLE | Update the UAIRegistry reference. |
+| `setAgentRegistry(newAddr)` | DEFAULT_ADMIN_ROLE | Update the AgentRegistry reference. |
 | `pause()` | PAUSER_ROLE | Pause submissions and slashing. |
 | `unpause()` | PAUSER_ROLE | Resume operations. |
 

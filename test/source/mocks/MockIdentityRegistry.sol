@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 /// @dev Minimal mock of ERC-8004 IdentityRegistryUpgradeable for testing
-///      IdentityRegistryPlus. Simulates register(), ownerOf(), tokenURI().
+///      IdentityRegistrySource. Simulates register(), ownerOf(), tokenURI().
 contract MockIdentityRegistry {
     uint256 private _lastId;
     mapping(uint256 => address) private _owners;

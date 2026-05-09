@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-/// @param agentId The agent ID not found in UAIRegistry.
+/// @param agentId The agent ID not found in AgentRegistry.
 error AgentNotRegisteredForReputation(uint256 agentId);
 
 /// @param agentId The agent ID.
@@ -29,7 +29,7 @@ error InvalidRegistryAddressReputation();
 /// @param agentId The agent ID.
 /// @param chainNamespace CAIP-2 namespace of the unlinked chain.
 /// @param chainId CAIP-2 chain ID of the unlinked chain.
-error ShadowNotLinked(uint256 agentId, string chainNamespace, string chainId);
+error BindingNotLinked(uint256 agentId, string chainNamespace, string chainId);
 
 /// @param size The submitted batch size.
 /// @param max The maximum allowed batch size.
@@ -41,8 +41,8 @@ error EmptyBatch();
 /// @param valueDecimals The invalid decimal value.
 error InvalidDecimals(uint8 valueDecimals);
 
-/// @dev Thrown when uaiRegistry address is zero.
-error InvalidUAIRegistryAddress();
+/// @dev Thrown when agentRegistry address is zero.
+error InvalidAgentRegistryAddress();
 
 /// @dev Thrown when admin or pauser address is zero in initialize().
 error InvalidInitializationAddress();

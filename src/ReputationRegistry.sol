@@ -10,7 +10,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {IUAIRegistry} from "./interfaces/IUAIRegistry.sol";
+import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
 import {IReputationRegistry} from "./IReputationRegistry.sol";
 import {
     AgentNotRegisteredForReputation,
@@ -18,11 +18,11 @@ import {
     InvalidSeverity,
     InvalidChainIdentifierReputation,
     InvalidRegistryAddressReputation,
-    ShadowNotLinked,
+    BindingNotLinked,
     BatchTooLarge,
     EmptyBatch,
     InvalidDecimals,
-    InvalidUAIRegistryAddress,
+    InvalidAgentRegistryAddress,
     InvalidInitializationAddress,
     MaxSlashRecordsExceeded,
     SummaryValueOutOfRange,
@@ -32,7 +32,7 @@ import {
 /// @title ReputationRegistry
 /// @notice Cross-chain agent reputation aggregator on Push Chain.
 ///         Collects per-chain reputation snapshots from authorized reporters
-///         and computes aggregated scores keyed to canonical UEA via UAIRegistry.
+///         and computes aggregated scores keyed to canonical UEA via AgentRegistry.
 contract ReputationRegistry is
     IReputationRegistry,
     Initializable,
@@ -68,7 +68,7 @@ contract ReputationRegistry is
     //  ERC-7201 namespaced storage
     // ──────────────────────────────────────────────
 
-    /// @custom:storage-location erc7201:reputationregistry.storage
+    /// @custom:storage-location erc7201:agentgraph.reputation.storage
     struct ReputationRegistryStorage {
         mapping(uint256 => AggregatedReputation) aggregated;
         mapping(uint256 => mapping(bytes32 => ChainReputation)) chainReputations;
@@ -77,13 +77,13 @@ contract ReputationRegistry is
         mapping(uint256 => mapping(bytes32 => bool)) chainKeyExists;
         mapping(uint256 => SlashRecord[]) slashRecords;
         mapping(uint256 => uint256) totalSlashSeverity;
-        address uaiRegistry;
+        address agentRegistry;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("reputationregistry.storage")) - 1))
+    // keccak256(abi.encode(uint256(keccak256("agentgraph.reputation.storage")) - 1))
     //   & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_SLOT =
-        0xe070097f04227be86f6bce14fa1fa3a34d6ed0171b77fb88539672b7cff99400;
+        0xb67861f8610ba7b280c2ed92ad7bea4b114932d67697dbe598601e1297e05100;
 
     function _getStorage() private pure returns (ReputationRegistryStorage storage s) {
         bytes32 slot = STORAGE_SLOT;
@@ -103,17 +103,17 @@ contract ReputationRegistry is
     /// @notice Initialize the ReputationRegistry proxy.
     /// @param admin Address receiving DEFAULT_ADMIN_ROLE.
     /// @param pauser Address receiving PAUSER_ROLE.
-    /// @param uaiRegistryAddr Address of the deployed UAIRegistry proxy.
+    /// @param agentRegistryAddr Address of the deployed AgentRegistry proxy.
     function initialize(
         address admin,
         address pauser,
-        address uaiRegistryAddr
+        address agentRegistryAddr
     ) external initializer {
         if (admin == address(0) || pauser == address(0)) {
             revert InvalidInitializationAddress();
         }
-        if (uaiRegistryAddr == address(0)) {
-            revert InvalidUAIRegistryAddress();
+        if (agentRegistryAddr == address(0)) {
+            revert InvalidAgentRegistryAddress();
         }
 
         __AccessControl_init();
@@ -122,7 +122,7 @@ contract ReputationRegistry is
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
 
-        _getStorage().uaiRegistry = uaiRegistryAddr;
+        _getStorage().agentRegistry = agentRegistryAddr;
     }
 
     // ──────────────────────────────────────────────
@@ -191,8 +191,8 @@ contract ReputationRegistry is
         }
 
         ReputationRegistryStorage storage s = _getStorage();
-        IUAIRegistry uaiReg = IUAIRegistry(s.uaiRegistry);
-        if (!uaiReg.isRegistered(agentId)) {
+        IAgentRegistry agentReg = IAgentRegistry(s.agentRegistry);
+        if (!agentReg.isRegistered(agentId)) {
             revert AgentNotRegisteredForReputation(agentId);
         }
         if (s.slashRecords[agentId].length >= MAX_SLASH_RECORDS) {
@@ -226,12 +226,12 @@ contract ReputationRegistry is
         uint256 agentId
     ) external whenNotPaused {
         ReputationRegistryStorage storage s = _getStorage();
-        IUAIRegistry uaiReg = IUAIRegistry(s.uaiRegistry);
-        if (!uaiReg.isRegistered(agentId)) {
+        IAgentRegistry agentReg = IAgentRegistry(s.agentRegistry);
+        if (!agentReg.isRegistered(agentId)) {
             revert AgentNotRegisteredForReputation(agentId);
         }
 
-        IUAIRegistry.ShadowEntry[] memory shadows = uaiReg.getShadows(agentId);
+        IAgentRegistry.BindEntry[] memory entries = agentReg.getBindings(agentId);
 
         uint256 keyLen = s.chainKeys[agentId].length;
         uint256 i;
@@ -242,10 +242,10 @@ contract ReputationRegistry is
             bool stillLinked;
             bytes32 crNsHash = keccak256(bytes(cr.chainNamespace));
             bytes32 crIdHash = keccak256(bytes(cr.chainId));
-            for (uint256 j; j < shadows.length; j++) {
+            for (uint256 j; j < entries.length; j++) {
                 if (
-                    keccak256(bytes(shadows[j].chainNamespace)) == crNsHash
-                        && keccak256(bytes(shadows[j].chainId)) == crIdHash
+                    keccak256(bytes(entries[j].chainNamespace)) == crNsHash
+                        && keccak256(bytes(entries[j].chainId)) == crIdHash
                 ) {
                     stillLinked = true;
                     break;
@@ -268,16 +268,16 @@ contract ReputationRegistry is
     // ──────────────────────────────────────────────
 
     /// @inheritdoc IReputationRegistry
-    function setUAIRegistry(
-        address newUAIRegistry
+    function setAgentRegistry(
+        address newAgentRegistry
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newUAIRegistry == address(0)) {
-            revert InvalidUAIRegistryAddress();
+        if (newAgentRegistry == address(0)) {
+            revert InvalidAgentRegistryAddress();
         }
         ReputationRegistryStorage storage s = _getStorage();
-        address oldAddr = s.uaiRegistry;
-        s.uaiRegistry = newUAIRegistry;
-        emit UAIRegistryUpdated(oldAddr, newUAIRegistry);
+        address oldAddr = s.agentRegistry;
+        s.agentRegistry = newAgentRegistry;
+        emit AgentRegistryUpdated(oldAddr, newAgentRegistry);
     }
 
     // ──────────────────────────────────────────────
@@ -359,8 +359,8 @@ contract ReputationRegistry is
     }
 
     /// @inheritdoc IReputationRegistry
-    function getUAIRegistry() external view returns (address) {
-        return _getStorage().uaiRegistry;
+    function getAgentRegistry() external view returns (address) {
+        return _getStorage().agentRegistry;
     }
 
     // ──────────────────────────────────────────────
@@ -397,13 +397,13 @@ contract ReputationRegistry is
         }
 
         ReputationRegistryStorage storage s = _getStorage();
-        IUAIRegistry uaiReg = IUAIRegistry(s.uaiRegistry);
+        IAgentRegistry agentReg = IAgentRegistry(s.agentRegistry);
 
-        if (!uaiReg.isRegistered(sub.agentId)) {
+        if (!agentReg.isRegistered(sub.agentId)) {
             revert AgentNotRegisteredForReputation(sub.agentId);
         }
 
-        _validateShadowLink(sub.agentId, sub.chainNamespace, sub.chainId);
+        _validateBinding(sub.agentId, sub.chainNamespace, sub.chainId);
 
         bytes32 chainKey = keccak256(abi.encode(sub.chainNamespace, sub.chainId));
 
@@ -427,7 +427,7 @@ contract ReputationRegistry is
             chainNamespace: sub.chainNamespace,
             chainId: sub.chainId,
             registryAddress: sub.registryAddress,
-            shadowAgentId: sub.shadowAgentId,
+            boundAgentId: sub.boundAgentId,
             feedbackCount: sub.feedbackCount,
             summaryValue: sub.summaryValue,
             valueDecimals: sub.valueDecimals,
@@ -449,30 +449,30 @@ contract ReputationRegistry is
     }
 
     // ──────────────────────────────────────────────
-    //  Internal — Shadow Validation
+    //  Internal — Binding Validation
     // ──────────────────────────────────────────────
 
-    function _validateShadowLink(
+    function _validateBinding(
         uint256 agentId,
         string calldata chainNamespace,
         string calldata chainId
     ) internal view {
-        IUAIRegistry uaiReg = IUAIRegistry(_getStorage().uaiRegistry);
-        IUAIRegistry.ShadowEntry[] memory shadows = uaiReg.getShadows(agentId);
+        IAgentRegistry agentReg = IAgentRegistry(_getStorage().agentRegistry);
+        IAgentRegistry.BindEntry[] memory entries = agentReg.getBindings(agentId);
 
         bytes32 targetNsHash = keccak256(bytes(chainNamespace));
         bytes32 targetIdHash = keccak256(bytes(chainId));
 
-        for (uint256 i; i < shadows.length; i++) {
+        for (uint256 i; i < entries.length; i++) {
             if (
-                keccak256(bytes(shadows[i].chainNamespace)) == targetNsHash
-                    && keccak256(bytes(shadows[i].chainId)) == targetIdHash
+                keccak256(bytes(entries[i].chainNamespace)) == targetNsHash
+                    && keccak256(bytes(entries[i].chainId)) == targetIdHash
             ) {
                 return;
             }
         }
 
-        revert ShadowNotLinked(agentId, chainNamespace, chainId);
+        revert BindingNotLinked(agentId, chainNamespace, chainId);
     }
 
     // ──────────────────────────────────────────────

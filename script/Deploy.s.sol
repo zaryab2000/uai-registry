@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {UAIRegistry} from "src/UAIRegistry.sol";
+import {AgentRegistry} from "src/AgentRegistry.sol";
 import {IUEAFactory} from "src/interfaces/IUEAFactory.sol";
 import {
     TransparentUpgradeableProxy
@@ -16,15 +16,15 @@ contract Deploy is Script {
 
         vm.startBroadcast();
 
-        UAIRegistry impl = new UAIRegistry(IUEAFactory(UEA_FACTORY));
+        AgentRegistry impl = new AgentRegistry(IUEAFactory(UEA_FACTORY));
         console.log("Implementation:", address(impl));
 
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), deployer, abi.encodeCall(UAIRegistry.initialize, (deployer, deployer))
+            address(impl), deployer, abi.encodeCall(AgentRegistry.initialize, (deployer, deployer))
         );
         console.log("Proxy:", address(proxy));
 
-        UAIRegistry registry = UAIRegistry(address(proxy));
+        AgentRegistry registry = AgentRegistry(address(proxy));
         console.log("ueaFactory:", address(registry.ueaFactory()));
 
         vm.stopBroadcast();

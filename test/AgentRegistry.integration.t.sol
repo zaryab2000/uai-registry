@@ -2,16 +2,16 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {UAIRegistry} from "src/UAIRegistry.sol";
-import {IUAIRegistry} from "src/interfaces/IUAIRegistry.sol";
+import {AgentRegistry} from "src/AgentRegistry.sol";
+import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
 import {IUEAFactory} from "src/interfaces/IUEAFactory.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
 import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-contract UAIRegistryIntegrationTest is Test {
-    UAIRegistry public registry;
+contract AgentRegistryIntegrationTest is Test {
+    AgentRegistry public registry;
 
     address constant UEA_FACTORY = 0x00000000000000000000000000000000000000eA;
     uint256 constant PUSH_CHAIN_ID = 42_101;
@@ -19,9 +19,9 @@ contract UAIRegistryIntegrationTest is Test {
     address public admin;
     uint256 public adminKey;
 
-    bytes32 public constant SHADOW_LINK_TYPEHASH = keccak256(
-        "ShadowLink(address canonicalUEA,string chainNamespace,string chainId,"
-        "address registryAddress,uint256 shadowAgentId,uint256 nonce,uint256 deadline)"
+    bytes32 public constant BIND_TYPEHASH = keccak256(
+        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
     modifier onlyPushChain() {
@@ -34,11 +34,11 @@ contract UAIRegistryIntegrationTest is Test {
     function setUp() public onlyPushChain {
         (admin, adminKey) = makeAddrAndKey("integrationAdmin");
 
-        UAIRegistry impl = new UAIRegistry(IUEAFactory(UEA_FACTORY));
+        AgentRegistry impl = new AgentRegistry(IUEAFactory(UEA_FACTORY));
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), admin, abi.encodeCall(UAIRegistry.initialize, (admin, admin))
+            address(impl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, admin))
         );
-        registry = UAIRegistry(address(proxy));
+        registry = AgentRegistry(address(proxy));
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
@@ -71,12 +71,12 @@ contract UAIRegistryIntegrationTest is Test {
 
         assertEq(agentId, uint256(uint160(caller)));
 
-        IUAIRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertTrue(rec.registered);
         assertTrue(bytes(rec.originChainNamespace).length > 0);
     }
 
-    function test_Integration_LinkShadow_EthereumRegistry() public onlyPushChain {
+    function test_Integration_Bind_EthereumRegistry() public onlyPushChain {
         address caller = makeAddr("integrationLinker");
         (, uint256 signerKey) = makeAddrAndKey("integrationSigner");
 
@@ -87,7 +87,7 @@ contract UAIRegistryIntegrationTest is Test {
 
         bytes32 structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 caller,
                 keccak256(bytes("eip155")),
                 keccak256(bytes("1")),
@@ -101,13 +101,13 @@ contract UAIRegistryIntegrationTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
 
         vm.prank(caller);
-        registry.linkShadow(
-            IUAIRegistry.ShadowLinkRequest({
+        registry.bind(
+            IAgentRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: ethRegistry,
-                shadowAgentId: 42,
-                proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+                boundAgentId: 42,
+                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 1,
                 deadline: block.timestamp + 1 hours
@@ -115,7 +115,7 @@ contract UAIRegistryIntegrationTest is Test {
         );
 
         (address canonical, bool verified) =
-            registry.canonicalUEAFromShadow("eip155", "1", ethRegistry, 42);
+            registry.canonicalUEAFromBinding("eip155", "1", ethRegistry, 42);
         assertEq(canonical, caller);
         assertTrue(verified);
     }
@@ -130,18 +130,18 @@ contract UAIRegistryIntegrationTest is Test {
         address reg = address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
 
         string[3] memory chains = ["1", "8453", "42161"];
-        uint256[3] memory shadowIds = [uint256(42), uint256(17), uint256(8)];
+        uint256[3] memory boundIds = [uint256(42), uint256(17), uint256(8)];
 
         vm.startPrank(caller);
         for (uint256 i = 0; i < 3; i++) {
             bytes32 structHash = keccak256(
                 abi.encode(
-                    SHADOW_LINK_TYPEHASH,
+                    BIND_TYPEHASH,
                     caller,
                     keccak256(bytes("eip155")),
                     keccak256(bytes(chains[i])),
                     reg,
-                    shadowIds[i],
+                    boundIds[i],
                     i + 1,
                     block.timestamp + 1 hours
                 )
@@ -150,13 +150,13 @@ contract UAIRegistryIntegrationTest is Test {
                 keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
 
-            registry.linkShadow(
-                IUAIRegistry.ShadowLinkRequest({
+            registry.bind(
+                IAgentRegistry.BindRequest({
                     chainNamespace: "eip155",
                     chainId: chains[i],
                     registryAddress: reg,
-                    shadowAgentId: shadowIds[i],
-                    proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+                    boundAgentId: boundIds[i],
+                    proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
                     proofData: abi.encodePacked(r, s, v),
                     nonce: i + 1,
                     deadline: block.timestamp + 1 hours
@@ -164,18 +164,18 @@ contract UAIRegistryIntegrationTest is Test {
             );
         }
 
-        IUAIRegistry.ShadowEntry[] memory shadows = registry.getShadows(uint256(uint160(caller)));
-        assertEq(shadows.length, 3);
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(caller)));
+        assertEq(bindings.length, 3);
 
-        registry.unlinkShadow("eip155", "8453", reg);
+        registry.unbind("eip155", "8453", reg);
 
-        shadows = registry.getShadows(uint256(uint160(caller)));
-        assertEq(shadows.length, 2);
+        bindings = registry.getBindings(uint256(uint160(caller)));
+        assertEq(bindings.length, 2);
 
-        (address canonical,) = registry.canonicalUEAFromShadow("eip155", "8453", reg, 17);
+        (address canonical,) = registry.canonicalUEAFromBinding("eip155", "8453", reg, 17);
         assertEq(canonical, address(0));
 
-        (canonical,) = registry.canonicalUEAFromShadow("eip155", "1", reg, 42);
+        (canonical,) = registry.canonicalUEAFromBinding("eip155", "1", reg, 42);
         assertEq(canonical, caller);
 
         vm.stopPrank();

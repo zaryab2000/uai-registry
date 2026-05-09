@@ -2,8 +2,8 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {UAIRegistry} from "src/UAIRegistry.sol";
-import {IUAIRegistry} from "src/interfaces/IUAIRegistry.sol";
+import {AgentRegistry} from "src/AgentRegistry.sol";
+import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
 import "src/libraries/Errors.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
@@ -13,8 +13,8 @@ import {
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
-contract UAIRegistryTest is Test {
-    UAIRegistry public registry;
+contract AgentRegistryTest is Test {
+    AgentRegistry public registry;
     MockUEAFactory public factory;
 
     address public admin = makeAddr("admin");
@@ -34,11 +34,11 @@ contract UAIRegistryTest is Test {
             })
         );
 
-        UAIRegistry impl = new UAIRegistry(factory);
+        AgentRegistry impl = new AgentRegistry(factory);
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), admin, abi.encodeCall(UAIRegistry.initialize, (admin, pauser))
+            address(impl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
         );
-        registry = UAIRegistry(address(proxy));
+        registry = AgentRegistry(address(proxy));
     }
 
     // ──────────────────────────────────────────────
@@ -49,7 +49,7 @@ contract UAIRegistryTest is Test {
         vm.prank(ueaUser);
         uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
 
-        IUAIRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertTrue(rec.registered);
         assertEq(rec.agentURI, AGENT_URI);
         assertEq(rec.agentCardHash, CARD_HASH);
@@ -63,7 +63,7 @@ contract UAIRegistryTest is Test {
         uint256 expectedId = uint256(uint160(ueaUser));
 
         vm.expectEmit(true, true, false, true);
-        emit IUAIRegistry.Registered(
+        emit IAgentRegistry.Registered(
             expectedId, ueaUser, "eip155", "1", abi.encodePacked(ueaUser), AGENT_URI, CARD_HASH
         );
 
@@ -80,7 +80,7 @@ contract UAIRegistryTest is Test {
         registry.register(newURI, newHash);
         vm.stopPrank();
 
-        IUAIRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertEq(rec.agentURI, newURI);
         assertEq(rec.agentCardHash, newHash);
         assertEq(rec.originChainNamespace, "eip155");
@@ -94,9 +94,9 @@ contract UAIRegistryTest is Test {
         bytes32 newHash = keccak256("updated-card");
 
         vm.expectEmit(true, false, false, true);
-        emit IUAIRegistry.AgentURIUpdated(agentId, newURI);
+        emit IAgentRegistry.AgentURIUpdated(agentId, newURI);
         vm.expectEmit(true, false, false, true);
-        emit IUAIRegistry.AgentCardHashUpdated(agentId, newHash);
+        emit IAgentRegistry.AgentCardHashUpdated(agentId, newHash);
 
         registry.register(newURI, newHash);
         vm.stopPrank();
@@ -124,7 +124,7 @@ contract UAIRegistryTest is Test {
         vm.prank(ueaUser);
         uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
 
-        IUAIRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertEq(rec.originChainNamespace, "eip155");
         assertEq(rec.originChainId, "1");
         assertEq(rec.ownerKey, abi.encodePacked(ueaUser));
@@ -135,7 +135,7 @@ contract UAIRegistryTest is Test {
         vm.prank(nativeUser);
         uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
 
-        IUAIRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertTrue(rec.nativeToPush);
         assertEq(rec.originChainNamespace, "push");
         assertEq(rec.originChainId, "42101");
@@ -180,7 +180,7 @@ contract UAIRegistryTest is Test {
 
         string memory newURI = "ipfs://QmUpdated";
         vm.expectEmit(true, false, false, true);
-        emit IUAIRegistry.AgentURIUpdated(agentId, newURI);
+        emit IAgentRegistry.AgentURIUpdated(agentId, newURI);
         registry.setAgentURI(newURI);
         vm.stopPrank();
     }
@@ -193,7 +193,7 @@ contract UAIRegistryTest is Test {
         registry.setAgentCardHash(newHash);
         vm.stopPrank();
 
-        IUAIRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertEq(rec.agentCardHash, newHash);
     }
 
@@ -276,7 +276,7 @@ contract UAIRegistryTest is Test {
         vm.prank(ueaUser);
         uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
 
-        IUAIRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertTrue(rec.registered);
         assertEq(rec.agentURI, AGENT_URI);
         assertEq(rec.agentCardHash, CARD_HASH);

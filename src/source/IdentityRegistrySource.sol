@@ -34,16 +34,16 @@ interface IIdentityRegistryLocal {
     ) external view returns (string memory);
 }
 
-/// @title IdentityRegistryPlus
+/// @title IdentityRegistrySource
 /// @notice ERC-8004+ source-chain wrapper that registers agents locally
 ///         via the existing ERC-8004 IdentityRegistry and propagates
-///         the registration to Push Chain's UAIRegistry via the
+///         the registration to Push Chain's AgentRegistry via the
 ///         Universal Gateway.
 /// @dev Deployed as a UUPS-upgradeable proxy alongside the existing
 ///      IdentityRegistry. Does NOT inherit from IdentityRegistryUpgradeable
 ///      because register() is non-virtual in the base contract.
 ///      Instead, this contract calls the existing registry via composition.
-contract IdentityRegistryPlus is
+contract IdentityRegistrySource is
     Initializable,
     OwnableUpgradeable,
     PausableUpgradeable,
@@ -66,7 +66,7 @@ contract IdentityRegistryPlus is
     //  Storage
     // ──────────────────────────────────────────────
 
-    /// @custom:storage-location erc7201:erc8004plus.identity.source
+    /// @custom:storage-location erc7201:agentgraph.identity.source
     struct IdentityPlusStorage {
         address gatewayAdapter;
         address settlementRegistry;
@@ -77,9 +77,9 @@ contract IdentityRegistryPlus is
     }
 
     // keccak256(abi.encode(uint256(keccak256(
-    //   "erc8004plus.identity.source")) - 1)) & ~bytes32(uint256(0xff))
+    //   "agentgraph.identity.source")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_SLOT =
-        0xf1c674ba209da31c146f52c6580f1c703ebb76997a6a13510c04efc0533a1200;
+        0xfb6f5e13b2041d58d3a146c3f8fa16a96932e97a0b81ae67143238ef2158ce00;
 
     function _getStorage() private pure returns (IdentityPlusStorage storage s) {
         bytes32 slot = STORAGE_SLOT;
@@ -97,11 +97,11 @@ contract IdentityRegistryPlus is
         _disableInitializers();
     }
 
-    /// @notice Initialize the IdentityRegistryPlus proxy.
+    /// @notice Initialize the IdentityRegistrySource proxy.
     /// @param owner_ Admin address.
     /// @param localRegistry_ Existing ERC-8004 IdentityRegistry on this chain.
     /// @param gatewayAdapter_ PushGatewayAdapter address.
-    /// @param settlementRegistry_ UAIRegistry address on Push Chain.
+    /// @param settlementRegistry_ AgentRegistry address on Push Chain.
     function initialize(
         address owner_,
         address localRegistry_,
@@ -209,7 +209,7 @@ contract IdentityRegistryPlus is
 
         bytes32 agentCardHash = keccak256(bytes(agentURI));
 
-        // Encode UAIRegistry.register(agentURI, agentCardHash)
+        // Encode AgentRegistry.register(agentURI, agentCardHash)
         bytes memory registerCalldata =
             abi.encodeWithSignature("register(string,bytes32)", agentURI, agentCardHash);
 

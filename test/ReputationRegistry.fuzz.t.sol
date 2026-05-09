@@ -2,8 +2,8 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {UAIRegistry} from "src/UAIRegistry.sol";
-import {IUAIRegistry} from "src/interfaces/IUAIRegistry.sol";
+import {AgentRegistry} from "src/AgentRegistry.sol";
+import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
 import {ReputationRegistry} from "src/ReputationRegistry.sol";
 import {IReputationRegistry} from "src/IReputationRegistry.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
@@ -13,7 +13,7 @@ import {
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 contract ReputationRegistryFuzzTest is Test {
-    UAIRegistry public uaiRegistry;
+    AgentRegistry public agentRegistry;
     ReputationRegistry public repRegistry;
     MockUEAFactory public factory;
 
@@ -26,11 +26,11 @@ contract ReputationRegistryFuzzTest is Test {
     uint256 public ueaUserKey;
     uint256 public agentId;
 
-    address constant SHADOW_REGISTRY = address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
+    address constant REGISTRY_ETH = address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
 
-    bytes32 public constant SHADOW_LINK_TYPEHASH = keccak256(
-        "ShadowLink(address canonicalUEA,string chainNamespace,string chainId,"
-        "address registryAddress,uint256 shadowAgentId,uint256 nonce,uint256 deadline)"
+    bytes32 public constant BIND_TYPEHASH = keccak256(
+        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
     function setUp() public {
@@ -43,17 +43,17 @@ contract ReputationRegistryFuzzTest is Test {
             })
         );
 
-        UAIRegistry uaiImpl = new UAIRegistry(factory);
-        TransparentUpgradeableProxy uaiProxy = new TransparentUpgradeableProxy(
-            address(uaiImpl), admin, abi.encodeCall(UAIRegistry.initialize, (admin, pauser))
+        AgentRegistry agentImpl = new AgentRegistry(factory);
+        TransparentUpgradeableProxy agentProxy = new TransparentUpgradeableProxy(
+            address(agentImpl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
         );
-        uaiRegistry = UAIRegistry(address(uaiProxy));
+        agentRegistry = AgentRegistry(address(agentProxy));
 
         ReputationRegistry repImpl = new ReputationRegistry();
         TransparentUpgradeableProxy repProxy = new TransparentUpgradeableProxy(
             address(repImpl),
             admin,
-            abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(uaiRegistry)))
+            abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(agentRegistry)))
         );
         repRegistry = ReputationRegistry(address(repProxy));
 
@@ -63,14 +63,14 @@ contract ReputationRegistryFuzzTest is Test {
         vm.stopPrank();
 
         vm.prank(ueaUser);
-        agentId = uaiRegistry.register("ipfs://QmTest", keccak256("card"));
+        agentId = agentRegistry.register("ipfs://QmTest", keccak256("card"));
 
-        _linkShadow("eip155", "1", SHADOW_REGISTRY, 42, 1);
+        _linkBinding("eip155", "1", REGISTRY_ETH, 42, 1);
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
         (, string memory name, string memory version, uint256 cId, address vc,,) =
-            uaiRegistry.eip712Domain();
+            agentRegistry.eip712Domain();
         return keccak256(
             abi.encode(
                 keccak256(
@@ -92,22 +92,22 @@ contract ReputationRegistryFuzzTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function _linkShadow(
+    function _linkBinding(
         string memory chainNs,
         string memory chainId,
         address registryAddr,
-        uint256 shadowAgentId,
+        uint256 boundAgentId,
         uint256 nonce
     ) internal {
         uint256 deadline = block.timestamp + 1 hours;
         bytes32 structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 ueaUser,
                 keccak256(bytes(chainNs)),
                 keccak256(bytes(chainId)),
                 registryAddr,
-                shadowAgentId,
+                boundAgentId,
                 nonce,
                 deadline
             )
@@ -116,13 +116,13 @@ contract ReputationRegistryFuzzTest is Test {
         bytes memory sig = _signDigest(digest);
 
         vm.prank(ueaUser);
-        uaiRegistry.linkShadow(
-            IUAIRegistry.ShadowLinkRequest({
+        agentRegistry.bind(
+            IAgentRegistry.BindRequest({
                 chainNamespace: chainNs,
                 chainId: chainId,
                 registryAddress: registryAddr,
-                shadowAgentId: shadowAgentId,
-                proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+                boundAgentId: boundAgentId,
+                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: sig,
                 nonce: nonce,
                 deadline: deadline
@@ -145,8 +145,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: feedbackCount,
                 summaryValue: summaryValue,
                 valueDecimals: 18,
@@ -176,8 +176,8 @@ contract ReputationRegistryFuzzTest is Test {
         count1 = uint64(bound(count1, 1, 1e9));
         count2 = uint64(bound(count2, 1, 1e9));
 
-        address shadowReg2 = address(0x8004b269Fb4A3325136eB29FA0ceb6d2E539b543);
-        _linkShadow("eip155", "8453", shadowReg2, 17, 2);
+        address reg2 = address(0x8004b269Fb4A3325136eB29FA0ceb6d2E539b543);
+        _linkBinding("eip155", "8453", reg2, 17, 2);
 
         vm.startPrank(reporter);
         repRegistry.submitReputation(
@@ -185,8 +185,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: count1,
                 summaryValue: 90 * 1e18,
                 valueDecimals: 18,
@@ -200,8 +200,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "8453",
-                registryAddress: shadowReg2,
-                shadowAgentId: 17,
+                registryAddress: reg2,
+                boundAgentId: 17,
                 feedbackCount: count2,
                 summaryValue: 80 * 1e18,
                 valueDecimals: 18,
@@ -230,8 +230,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: 100,
                 summaryValue: 90 * 1e18,
                 valueDecimals: 18,
@@ -248,8 +248,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: 200,
                 summaryValue: 95 * 1e18,
                 valueDecimals: 18,
@@ -271,8 +271,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: 10,
                 summaryValue: 50 * 1e18,
                 valueDecimals: 18,
@@ -302,8 +302,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: count,
                 summaryValue: 85 * 1e18,
                 valueDecimals: 18,
@@ -338,8 +338,8 @@ contract ReputationRegistryFuzzTest is Test {
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
-                registryAddress: SHADOW_REGISTRY,
-                shadowAgentId: 42,
+                registryAddress: REGISTRY_ETH,
+                boundAgentId: 42,
                 feedbackCount: uint64(x),
                 summaryValue: 100 * 1e18,
                 valueDecimals: 18,

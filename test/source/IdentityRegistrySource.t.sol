@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {IdentityRegistryPlus} from "src/source/IdentityRegistryPlus.sol";
+import {IdentityRegistrySource} from "src/source/IdentityRegistrySource.sol";
 import {
     InvalidGatewayAdapter,
     InvalidSettlementRegistry,
@@ -15,8 +15,8 @@ import {MockGatewayAdapter} from "./mocks/MockGateway.sol";
 import {MockIdentityRegistry} from "./mocks/MockIdentityRegistry.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-contract IdentityRegistryPlusTest is Test {
-    IdentityRegistryPlus public plus;
+contract IdentityRegistrySourceTest is Test {
+    IdentityRegistrySource public plus;
     MockGatewayAdapter public gateway;
     MockIdentityRegistry public localReg;
 
@@ -32,15 +32,15 @@ contract IdentityRegistryPlusTest is Test {
         gateway = new MockGatewayAdapter(GATEWAY_FEE);
         localReg = new MockIdentityRegistry();
 
-        IdentityRegistryPlus impl = new IdentityRegistryPlus();
+        IdentityRegistrySource impl = new IdentityRegistrySource();
         ERC1967Proxy proxy = new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                IdentityRegistryPlus.initialize,
+                IdentityRegistrySource.initialize,
                 (owner, address(localReg), address(gateway), settlement)
             )
         );
-        plus = IdentityRegistryPlus(address(proxy));
+        plus = IdentityRegistrySource(address(proxy));
 
         vm.prank(owner);
         plus.setPropagationEnabled(true);
@@ -60,23 +60,24 @@ contract IdentityRegistryPlusTest is Test {
     }
 
     function test_Initialize_ZeroGateway_Reverts() public {
-        IdentityRegistryPlus impl = new IdentityRegistryPlus();
+        IdentityRegistrySource impl = new IdentityRegistrySource();
         vm.expectRevert(InvalidGatewayAdapter.selector);
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                IdentityRegistryPlus.initialize, (owner, address(localReg), address(0), settlement)
+                IdentityRegistrySource.initialize,
+                (owner, address(localReg), address(0), settlement)
             )
         );
     }
 
     function test_Initialize_ZeroSettlement_Reverts() public {
-        IdentityRegistryPlus impl = new IdentityRegistryPlus();
+        IdentityRegistrySource impl = new IdentityRegistrySource();
         vm.expectRevert(InvalidSettlementRegistry.selector);
         new ERC1967Proxy(
             address(impl),
             abi.encodeCall(
-                IdentityRegistryPlus.initialize,
+                IdentityRegistrySource.initialize,
                 (owner, address(localReg), address(gateway), address(0))
             )
         );
@@ -101,7 +102,7 @@ contract IdentityRegistryPlusTest is Test {
 
     function test_Register_EmitsCrossChainEvent() public {
         vm.expectEmit(true, true, true, true);
-        emit IdentityRegistryPlus.CrossChainRegistrationSent(0, agent, uea);
+        emit IdentityRegistrySource.CrossChainRegistrationSent(0, agent, uea);
 
         vm.prank(agent);
         plus.register{value: GATEWAY_FEE}(AGENT_URI, uea, "");

@@ -2,8 +2,8 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {UAIRegistry} from "src/UAIRegistry.sol";
-import {IUAIRegistry} from "src/interfaces/IUAIRegistry.sol";
+import {AgentRegistry} from "src/AgentRegistry.sol";
+import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
 import "src/libraries/Errors.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
@@ -11,8 +11,8 @@ import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-contract UAIRegistryFuzz is Test {
-    UAIRegistry public registry;
+contract AgentRegistryFuzz is Test {
+    AgentRegistry public registry;
     MockUEAFactory public factory;
 
     address public admin = makeAddr("admin");
@@ -20,18 +20,22 @@ contract UAIRegistryFuzz is Test {
 
     bytes32 constant CARD_HASH = keccak256("fuzz-card");
 
-    bytes32 public constant SHADOW_LINK_TYPEHASH = keccak256(
-        "ShadowLink(address canonicalUEA,string chainNamespace,string chainId,"
-        "address registryAddress,uint256 shadowAgentId,uint256 nonce,uint256 deadline)"
+    // ERC-1967 admin slot: keccak256("eip1967.proxy.admin") - 1
+    bytes32 constant ERC1967_ADMIN_SLOT =
+        0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
+
+    bytes32 public constant BIND_TYPEHASH = keccak256(
+        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
     function setUp() public {
         factory = new MockUEAFactory();
-        UAIRegistry impl = new UAIRegistry(factory);
+        AgentRegistry impl = new AgentRegistry(factory);
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), admin, abi.encodeCall(UAIRegistry.initialize, (admin, pauser))
+            address(impl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
         );
-        registry = UAIRegistry(address(proxy));
+        registry = AgentRegistry(address(proxy));
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
@@ -62,10 +66,16 @@ contract UAIRegistryFuzz is Test {
     ) public {
         vm.assume(caller != address(0));
         vm.assume(caller != admin);
+        vm.assume(caller != _proxyAdmin());
 
         vm.prank(caller);
         uint256 agentId = registry.register("ipfs://fuzz", CARD_HASH);
         assertEq(agentId, uint256(uint160(caller)));
+    }
+
+    function _proxyAdmin() internal view returns (address) {
+        bytes32 slot = vm.load(address(registry), ERC1967_ADMIN_SLOT);
+        return address(uint160(uint256(slot)));
     }
 
     function testFuzz_OwnerOf_AlwaysMatchesAgentId(
@@ -73,18 +83,19 @@ contract UAIRegistryFuzz is Test {
     ) public {
         vm.assume(caller != address(0));
         vm.assume(caller != admin);
+        vm.assume(caller != _proxyAdmin());
 
         vm.prank(caller);
         uint256 agentId = registry.register("ipfs://fuzz", CARD_HASH);
         assertEq(registry.ownerOf(agentId), caller);
     }
 
-    function testFuzz_LinkShadow_WrongSignerReverts(
+    function testFuzz_Bind_WrongSignerReverts(
         uint256 wrongKey,
-        uint256 shadowAgentId
+        uint256 boundAgentId
     ) public {
         wrongKey = bound(wrongKey, 1, type(uint128).max);
-        shadowAgentId = bound(shadowAgentId, 1, type(uint128).max);
+        boundAgentId = bound(boundAgentId, 1, type(uint128).max);
 
         (address caller, uint256 callerKey) = makeAddrAndKey("fuzzCaller");
         vm.assume(wrongKey != callerKey);
@@ -94,12 +105,12 @@ contract UAIRegistryFuzz is Test {
 
         bytes32 structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 caller,
                 keccak256(bytes("eip155")),
                 keccak256(bytes("1")),
                 address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId,
+                boundAgentId,
                 uint256(1),
                 block.timestamp + 1 hours
             )
@@ -107,27 +118,27 @@ contract UAIRegistryFuzz is Test {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, digest);
 
-        IUAIRegistry.ShadowLinkRequest memory req = IUAIRegistry.ShadowLinkRequest({
+        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-            shadowAgentId: shadowAgentId,
-            proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+            boundAgentId: boundAgentId,
+            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: abi.encodePacked(r, s, v),
             nonce: 1,
             deadline: block.timestamp + 1 hours
         });
 
         vm.prank(caller);
-        vm.expectRevert(InvalidShadowSignature.selector);
-        registry.linkShadow(req);
+        vm.expectRevert(InvalidBindSignature.selector);
+        registry.bind(req);
     }
 
-    function testFuzz_ShadowDedup_NoDuplicates(
-        uint256 shadowAgentId,
+    function testFuzz_BindDedup_NoDuplicates(
+        uint256 boundAgentId,
         uint256 chainIdNum
     ) public {
-        shadowAgentId = bound(shadowAgentId, 1, type(uint128).max);
+        boundAgentId = bound(boundAgentId, 1, type(uint128).max);
         chainIdNum = bound(chainIdNum, 1, 10_000);
         string memory chainId = vm.toString(chainIdNum);
 
@@ -137,12 +148,12 @@ contract UAIRegistryFuzz is Test {
 
         bytes32 structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 caller,
                 keccak256(bytes("eip155")),
                 keccak256(bytes(chainId)),
                 address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId,
+                boundAgentId,
                 uint256(1),
                 block.timestamp + 1 hours
             )
@@ -150,28 +161,28 @@ contract UAIRegistryFuzz is Test {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(callerKey, digest);
 
-        IUAIRegistry.ShadowLinkRequest memory req = IUAIRegistry.ShadowLinkRequest({
+        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: chainId,
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-            shadowAgentId: shadowAgentId,
-            proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+            boundAgentId: boundAgentId,
+            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: abi.encodePacked(r, s, v),
             nonce: 1,
             deadline: block.timestamp + 1 hours
         });
 
         vm.prank(caller);
-        registry.linkShadow(req);
+        registry.bind(req);
 
         structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 caller,
                 keccak256(bytes("eip155")),
                 keccak256(bytes(chainId)),
                 address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId,
+                boundAgentId,
                 uint256(2),
                 block.timestamp + 1 hours
             )
@@ -179,12 +190,12 @@ contract UAIRegistryFuzz is Test {
         digest = keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
         (v, r, s) = vm.sign(callerKey, digest);
 
-        IUAIRegistry.ShadowLinkRequest memory req2 = IUAIRegistry.ShadowLinkRequest({
+        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: chainId,
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-            shadowAgentId: shadowAgentId,
-            proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+            boundAgentId: boundAgentId,
+            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: abi.encodePacked(r, s, v),
             nonce: 2,
             deadline: block.timestamp + 1 hours
@@ -192,13 +203,13 @@ contract UAIRegistryFuzz is Test {
 
         vm.prank(caller);
         vm.expectRevert();
-        registry.linkShadow(req2);
+        registry.bind(req2);
     }
 
-    function testFuzz_UnlinkRelink_AlwaysSucceeds(
-        uint256 shadowAgentId
+    function testFuzz_UnbindRebind_AlwaysSucceeds(
+        uint256 boundAgentId
     ) public {
-        shadowAgentId = bound(shadowAgentId, 1, type(uint128).max);
+        boundAgentId = bound(boundAgentId, 1, type(uint128).max);
 
         (address caller, uint256 callerKey) = makeAddrAndKey("fuzzRelink");
         vm.prank(caller);
@@ -206,12 +217,12 @@ contract UAIRegistryFuzz is Test {
 
         bytes32 structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 caller,
                 keccak256(bytes("eip155")),
                 keccak256(bytes("1")),
                 address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId,
+                boundAgentId,
                 uint256(1),
                 block.timestamp + 1 hours
             )
@@ -220,29 +231,29 @@ contract UAIRegistryFuzz is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(callerKey, digest);
 
         vm.startPrank(caller);
-        registry.linkShadow(
-            IUAIRegistry.ShadowLinkRequest({
+        registry.bind(
+            IAgentRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId: shadowAgentId,
-                proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+                boundAgentId: boundAgentId,
+                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 1,
                 deadline: block.timestamp + 1 hours
             })
         );
 
-        registry.unlinkShadow("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
+        registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
 
         structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 caller,
                 keccak256(bytes("eip155")),
                 keccak256(bytes("1")),
                 address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId,
+                boundAgentId,
                 uint256(2),
                 block.timestamp + 1 hours
             )
@@ -250,13 +261,13 @@ contract UAIRegistryFuzz is Test {
         digest = keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
         (v, r, s) = vm.sign(callerKey, digest);
 
-        registry.linkShadow(
-            IUAIRegistry.ShadowLinkRequest({
+        registry.bind(
+            IAgentRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId: shadowAgentId,
-                proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+                boundAgentId: boundAgentId,
+                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 2,
                 deadline: block.timestamp + 1 hours
@@ -264,16 +275,16 @@ contract UAIRegistryFuzz is Test {
         );
         vm.stopPrank();
 
-        (address canonical,) = registry.canonicalUEAFromShadow(
-            "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), shadowAgentId
+        (address canonical,) = registry.canonicalUEAFromBinding(
+            "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), boundAgentId
         );
         assertEq(canonical, caller);
     }
 
-    function testFuzz_CanonicalUEAFromShadow_Consistent(
-        uint256 shadowAgentId
+    function testFuzz_CanonicalUEAFromBinding_Consistent(
+        uint256 boundAgentId
     ) public {
-        shadowAgentId = bound(shadowAgentId, 1, type(uint128).max);
+        boundAgentId = bound(boundAgentId, 1, type(uint128).max);
 
         (address caller, uint256 callerKey) = makeAddrAndKey("fuzzConsistent");
         vm.prank(caller);
@@ -281,12 +292,12 @@ contract UAIRegistryFuzz is Test {
 
         bytes32 structHash = keccak256(
             abi.encode(
-                SHADOW_LINK_TYPEHASH,
+                BIND_TYPEHASH,
                 caller,
                 keccak256(bytes("eip155")),
                 keccak256(bytes("1")),
                 address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId,
+                boundAgentId,
                 uint256(1),
                 block.timestamp + 1 hours
             )
@@ -295,30 +306,30 @@ contract UAIRegistryFuzz is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(callerKey, digest);
 
         vm.startPrank(caller);
-        registry.linkShadow(
-            IUAIRegistry.ShadowLinkRequest({
+        registry.bind(
+            IAgentRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
-                shadowAgentId: shadowAgentId,
-                proofType: IUAIRegistry.ShadowProofType.OWNER_KEY_SIGNED,
+                boundAgentId: boundAgentId,
+                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 1,
                 deadline: block.timestamp + 1 hours
             })
         );
 
-        (address canonical, bool verified) = registry.canonicalUEAFromShadow(
-            "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), shadowAgentId
+        (address canonical, bool verified) = registry.canonicalUEAFromBinding(
+            "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), boundAgentId
         );
         assertEq(canonical, caller);
         assertTrue(verified);
 
-        registry.unlinkShadow("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
+        registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
         vm.stopPrank();
 
-        (canonical, verified) = registry.canonicalUEAFromShadow(
-            "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), shadowAgentId
+        (canonical, verified) = registry.canonicalUEAFromBinding(
+            "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), boundAgentId
         );
         assertEq(canonical, address(0));
         assertFalse(verified);

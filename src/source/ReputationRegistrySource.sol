@@ -42,7 +42,7 @@ interface IReputationRegistryLocal {
     ) external view returns (address[] memory);
 }
 
-/// @title ReputationRegistryPlus
+/// @title ReputationRegistrySource
 /// @notice ERC-8004+ source-chain wrapper that submits feedback locally
 ///         via the existing ERC-8004 ReputationRegistry and propagates
 ///         reputation snapshots to Push Chain's ReputationRegistry via
@@ -51,7 +51,7 @@ interface IReputationRegistryLocal {
 ///      non-virtual in the base contract.
 ///      Reputation propagation is batched: snapshots are sent after
 ///      batchThreshold feedbacks or maxPropagationInterval elapsed.
-contract ReputationRegistryPlus is
+contract ReputationRegistrySource is
     Initializable,
     OwnableUpgradeable,
     PausableUpgradeable,
@@ -79,8 +79,8 @@ contract ReputationRegistryPlus is
     //  Storage
     // ──────────────────────────────────────────────
 
-    /// @custom:storage-location erc7201:erc8004plus.reputation.source
-    struct ReputationPlusStorage {
+    /// @custom:storage-location erc7201:agentgraph.reputation.source
+    struct ReputationSourceStorage {
         address gatewayAdapter;
         address settlementRegistry;
         address localRegistry;
@@ -95,11 +95,11 @@ contract ReputationRegistryPlus is
     }
 
     // keccak256(abi.encode(uint256(keccak256(
-    //   "erc8004plus.reputation.source")) - 1)) & ~bytes32(uint256(0xff))
+    //   "agentgraph.reputation.source")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_SLOT =
-        0x8e824f5048072b506e2d9dcadff6763714e8852b22ea17454bb654e73fc5be00;
+        0x48b3ed8006293b84cc75560b8f9b061cac45710afcdefb3feba9b575f7e80a00;
 
-    function _getStorage() private pure returns (ReputationPlusStorage storage s) {
+    function _getStorage() private pure returns (ReputationSourceStorage storage s) {
         bytes32 slot = STORAGE_SLOT;
         assembly {
             s.slot := slot
@@ -115,7 +115,7 @@ contract ReputationRegistryPlus is
         _disableInitializers();
     }
 
-    /// @notice Initialize the ReputationRegistryPlus proxy.
+    /// @notice Initialize the ReputationRegistrySource proxy.
     /// @param owner_ Admin address.
     /// @param localRegistry_ Existing ERC-8004 ReputationRegistry.
     /// @param gatewayAdapter_ PushGatewayAdapter address.
@@ -138,7 +138,7 @@ contract ReputationRegistryPlus is
         __Pausable_init();
         __UUPSUpgradeable_init();
 
-        ReputationPlusStorage storage s = _getStorage();
+        ReputationSourceStorage storage s = _getStorage();
         s.gatewayAdapter = gatewayAdapter_;
         s.settlementRegistry = settlementRegistry_;
         s.localRegistry = localRegistry_;
@@ -191,7 +191,7 @@ contract ReputationRegistryPlus is
     function _maybePropagate(
         uint256 agentId
     ) internal {
-        ReputationPlusStorage storage s = _getStorage();
+        ReputationSourceStorage storage s = _getStorage();
         if (!s.propagationEnabled) return;
 
         s.pendingFeedbackCount[agentId]++;
@@ -235,7 +235,7 @@ contract ReputationRegistryPlus is
         uint256[] calldata canonicalIds
     ) external onlyOwner {
         require(localAgentIds.length == canonicalIds.length, "length mismatch");
-        ReputationPlusStorage storage s = _getStorage();
+        ReputationSourceStorage storage s = _getStorage();
         for (uint256 i; i < localAgentIds.length; i++) {
             s.canonicalIds[localAgentIds[i]] = canonicalIds[i];
         }
@@ -248,7 +248,7 @@ contract ReputationRegistryPlus is
     function _propagateReputation(
         uint256 agentId
     ) internal {
-        ReputationPlusStorage storage s = _getStorage();
+        ReputationSourceStorage storage s = _getStorage();
 
         // Read current local summary (all clients, no tag filter)
         address[] memory clients = IReputationRegistryLocal(s.localRegistry).getClients(agentId);

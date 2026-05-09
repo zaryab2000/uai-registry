@@ -5,7 +5,7 @@ import {UniversalAccountId} from "../libraries/Types.sol";
 
 /// @title IUEAFactory
 /// @notice Minimal interface for the Push Chain UEA Factory.
-///         UAIRegistry only uses getOriginForUEA.
+///         AgentRegistry only uses getOriginForUEA.
 interface IUEAFactory {
     /// @notice Returns origin info for any address on Push Chain.
     /// @param addr Address to look up.
