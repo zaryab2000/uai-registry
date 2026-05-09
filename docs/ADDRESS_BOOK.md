@@ -1,6 +1,6 @@
 # Address Book
 
-Deployed contract addresses for TAP. Update this file after every deployment or upgrade.
+Deployed contract addresses for TAP (Trustless Agents Plus). Update this file after every deployment or upgrade.
 
 ---
 
@@ -12,17 +12,17 @@ Deployed: 2026-05-09
 
 | Component | Address |
 |-----------|---------|
-| Proxy | `0xc2E531735594A5275793234C86b51d0E486452Ea` |
-| Implementation (v1) | `0x3e7e8195391c5918ab8ba0133bc0dbdcdd62e54d` |
-| ProxyAdmin | `0x4ecc5665b9c46d3f461442d1e989b7b901b2b3f0` |
+| Proxy | `0x13499d36729467bd5C6B44725a10a0113cE47178` |
+| Implementation (v1) | `0x593a68fc512608e8f5bf4ebf919117c8ab8ecd15` |
+| ProxyAdmin | `0x062021b898e2693f41bb69d463c016cda568794e` |
 
 ### ReputationRegistry
 
 | Component | Address |
 |-----------|---------|
-| Proxy | `0x5ec27E61a3dC153115ddaEFfa4f9D5a9Ab9C3503` |
-| Implementation (v1) | `0x6ed969b1bbcdcc68790ed881ea11ddbb0a47dcb8` |
-| ProxyAdmin | `0x0f3609bc9fb29f73982e3a67012339dc44c755b4` |
+| Proxy | `0x90B484063622289742516c5dDFdDf1C1A3C2c50C` |
+| Implementation (v1) | `0x59ab150c2ba3efd618668a469db29f5c92eedd64` |
+| ProxyAdmin | `0x32e0b8a0fdd30c8a64bf013ea8d224ed79cbcab8` |
 
 ### Roles
 
@@ -44,10 +44,10 @@ Deployed: 2026-05-09
 
 ### Block Explorer Links
 
-- [AgentRegistry Proxy](https://donut.push.network/address/0xc2E531735594A5275793234C86b51d0E486452Ea)
-- [AgentRegistry Impl](https://donut.push.network/address/0x3e7e8195391c5918ab8ba0133bc0dbdcdd62e54d)
-- [ReputationRegistry Proxy](https://donut.push.network/address/0x5ec27E61a3dC153115ddaEFfa4f9D5a9Ab9C3503)
-- [ReputationRegistry Impl](https://donut.push.network/address/0x6ed969b1bbcdcc68790ed881ea11ddbb0a47dcb8)
+- [AgentRegistry Proxy](https://donut.push.network/address/0x13499d36729467bd5C6B44725a10a0113cE47178)
+- [AgentRegistry Impl](https://donut.push.network/address/0x593a68fc512608e8f5bf4ebf919117c8ab8ecd15)
+- [ReputationRegistry Proxy](https://donut.push.network/address/0x90B484063622289742516c5dDFdDf1C1A3C2c50C)
+- [ReputationRegistry Impl](https://donut.push.network/address/0x59ab150c2ba3efd618668a469db29f5c92eedd64)
 
 ---
 
@@ -55,8 +55,21 @@ Deployed: 2026-05-09
 
 | Date | Contract | Old Impl | New Impl | Notes |
 |------|----------|----------|----------|-------|
-| 2026-05-09 | AgentRegistry | — | `0x3e7e...e54d` | Initial deployment |
-| 2026-05-09 | ReputationRegistry | — | `0x6ed9...dcb8` | Initial deployment |
+| 2026-05-09 | AgentRegistry | — | `0x593a...cd15` | Initial deployment (TAP namespace) |
+| 2026-05-09 | ReputationRegistry | — | `0x59ab...dd64` | Initial deployment (TAP namespace) |
+
+---
+
+## Deprecated Deployments
+
+Previous deployments using `agentgraph.*` namespace (superseded by TAP rename):
+
+| Contract | Address | Status |
+|----------|---------|--------|
+| AgentRegistry Impl (old) | `0x3e7e8195391c5918ab8ba0133bc0dbdcdd62e54d` | Deprecated |
+| AgentRegistry Proxy (old) | `0xc2E531735594A5275793234C86b51d0E486452Ea` | Deprecated |
+| ReputationRegistry Impl (old) | `0x6ed969b1bbcdcc68790ed881ea11ddbb0a47dcb8` | Deprecated |
+| ReputationRegistry Proxy (old) | `0x5ec27E61a3dC153115ddaEFfa4f9D5a9Ab9C3503` | Deprecated |
 
 ---
 
