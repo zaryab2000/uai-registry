@@ -1290,6 +1290,135 @@ contract ReputationRegistryTest is Test {
     //  ERC-7201 Storage Slot Verification
     // ──────────────────────────────────────────────
 
+    // ──────────────────────────────────────────────
+    //  Branch Coverage Tests
+    // ──────────────────────────────────────────────
+
+    function test_Initialize_ZeroUAIRegistry_Reverts() public {
+        ReputationRegistry impl = new ReputationRegistry();
+        bytes memory initData = abi.encodeCall(
+            ReputationRegistry.initialize,
+            (admin, pauser, address(0))
+        );
+        vm.expectRevert(InvalidUAIRegistryAddress.selector);
+        new TransparentUpgradeableProxy(
+            address(impl), admin, initData
+        );
+    }
+
+    function test_Slash_EmptyChainIdentifier_Reverts() public {
+        vm.startPrank(slasher);
+
+        vm.expectRevert(InvalidChainIdentifierReputation.selector);
+        repRegistry.slash(
+            agentId, "", "1", "reason", keccak256("e"), 1000
+        );
+
+        vm.expectRevert(InvalidChainIdentifierReputation.selector);
+        repRegistry.slash(
+            agentId, "eip155", "", "reason", keccak256("e"), 1000
+        );
+
+        vm.stopPrank();
+    }
+
+    function test_Slash_AgentNotRegistered_Reverts() public {
+        uint256 fakeAgentId = 999;
+        vm.prank(slasher);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AgentNotRegisteredForReputation.selector,
+                fakeAgentId
+            )
+        );
+        repRegistry.slash(
+            fakeAgentId, "eip155", "1", "reason", keccak256("e"), 1000
+        );
+    }
+
+    function test_Slash_MaxRecordsExceeded_Reverts() public {
+        vm.startPrank(slasher);
+        for (uint256 i; i < 256; i++) {
+            repRegistry.slash(
+                agentId,
+                "eip155",
+                "1",
+                "reason",
+                keccak256(abi.encode(i)),
+                1
+            );
+        }
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MaxSlashRecordsExceeded.selector, agentId
+            )
+        );
+        repRegistry.slash(
+            agentId, "eip155", "1", "reason", keccak256("e"), 1
+        );
+        vm.stopPrank();
+    }
+
+    function test_Reaggregate_SkipsZeroFeedbackChain() public {
+        vm.prank(reporter);
+        repRegistry.submitReputation(
+            IReputationRegistry.ReputationSubmission({
+                agentId: agentId,
+                chainNamespace: "eip155",
+                chainId: "1",
+                registryAddress: SHADOW_REGISTRY_ETH,
+                shadowAgentId: 42,
+                feedbackCount: 0,
+                summaryValue: 0,
+                valueDecimals: 18,
+                positiveCount: 0,
+                negativeCount: 0,
+                sourceBlockNumber: 1000
+            })
+        );
+
+        IReputationRegistry.AggregatedReputation memory agg =
+            repRegistry.getAggregatedReputation(agentId);
+        assertEq(agg.totalFeedbackCount, 0);
+        assertEq(agg.weightedAvgValue, 0);
+        assertEq(agg.reputationScore, 0);
+    }
+
+    function test_Reaggregate_SwapsMiddleChainKey() public {
+        _submitForChain(
+            "eip155", "1", SHADOW_REGISTRY_ETH, 42, 100, 90e18, 1000
+        );
+        _submitForChain(
+            "eip155", "8453", SHADOW_REGISTRY_BASE, 17, 200, 85e18, 2000
+        );
+        _submitForChain(
+            "eip155", "42161", SHADOW_REGISTRY_ARB, 8, 150, 88e18, 3000
+        );
+
+        IReputationRegistry.AggregatedReputation memory aggBefore =
+            repRegistry.getAggregatedReputation(agentId);
+        assertEq(aggBefore.chainCount, 3);
+
+        vm.prank(ueaUser);
+        uaiRegistry.unlinkShadow("eip155", "1", SHADOW_REGISTRY_ETH);
+
+        repRegistry.reaggregate(agentId);
+
+        IReputationRegistry.AggregatedReputation memory aggAfter =
+            repRegistry.getAggregatedReputation(agentId);
+        assertEq(aggAfter.chainCount, 2);
+        assertEq(aggAfter.totalFeedbackCount, 350);
+
+        IReputationRegistry.ChainReputation memory ethRep =
+            repRegistry.getChainReputation(agentId, "eip155", "1");
+        assertEq(ethRep.feedbackCount, 0);
+    }
+
+    // ──────────────────────────────────────────────
+    //  ERC-7201 Storage Slot Verification
+    // ──────────────────────────────────────────────
+
     function test_StorageSlot_MatchesERC7201Formula() public pure {
         bytes32 expected = keccak256(
             abi.encode(

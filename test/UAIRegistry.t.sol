@@ -331,6 +331,44 @@ contract UAIRegistryTest is Test {
     }
 
     // ──────────────────────────────────────────────
+    //  Branch Coverage — Unregistered Agent Reads
+    // ──────────────────────────────────────────────
+
+    function test_SetAgentCardHash_NotRegistered_Reverts() public {
+        address unregistered = makeAddr("unregistered");
+        uint256 fakeId = uint256(uint160(unregistered));
+        vm.prank(unregistered);
+        vm.expectRevert(
+            abi.encodeWithSelector(AgentNotRegistered.selector, fakeId)
+        );
+        registry.setAgentCardHash(keccak256("card"));
+    }
+
+    function test_TokenURI_NotRegistered_Reverts() public {
+        uint256 fakeId = 12345;
+        vm.expectRevert(
+            abi.encodeWithSelector(AgentNotRegistered.selector, fakeId)
+        );
+        registry.tokenURI(fakeId);
+    }
+
+    function test_AgentURI_NotRegistered_Reverts() public {
+        uint256 fakeId = 12345;
+        vm.expectRevert(
+            abi.encodeWithSelector(AgentNotRegistered.selector, fakeId)
+        );
+        registry.agentURI(fakeId);
+    }
+
+    function test_CanonicalUEA_NotRegistered_Reverts() public {
+        uint256 fakeId = 12345;
+        vm.expectRevert(
+            abi.encodeWithSelector(AgentNotRegistered.selector, fakeId)
+        );
+        registry.canonicalUEA(fakeId);
+    }
+
+    // ──────────────────────────────────────────────
     //  supportsInterface
     // ──────────────────────────────────────────────
 

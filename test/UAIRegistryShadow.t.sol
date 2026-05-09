@@ -6,6 +6,7 @@ import {UAIRegistry} from "src/UAIRegistry.sol";
 import {IUAIRegistry} from "src/interfaces/IUAIRegistry.sol";
 import "src/libraries/Errors.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
+import {MockERC1271Wallet} from "./mocks/MockERC1271Wallet.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
 import {
     TransparentUpgradeableProxy
@@ -879,5 +880,157 @@ contract UAIRegistryShadowTest is Test {
         IUAIRegistry.ShadowEntry[] memory shadows =
             registry.getShadows(uint256(uint160(ueaUser)));
         assertEq(shadows.length, 0);
+    }
+
+    // ──────────────────────────────────────────────
+    //  ERC-1271 Signature Verification
+    // ──────────────────────────────────────────────
+
+    function _setupERC1271Agent(
+        MockERC1271Wallet wallet
+    ) internal returns (address walletUEA, uint256 walletAgentId) {
+        walletUEA = address(wallet);
+        factory.addUEA(
+            walletUEA,
+            UniversalAccountId({
+                chainNamespace: "eip155",
+                chainId: "1",
+                owner: abi.encodePacked(walletUEA)
+            })
+        );
+        vm.prank(walletUEA);
+        walletAgentId = registry.register(AGENT_URI, CARD_HASH);
+    }
+
+    function _erc1271ProofData(
+        address signer,
+        bytes memory signature
+    ) internal pure returns (bytes memory) {
+        return abi.encodePacked(signer, signature);
+    }
+
+    function _buildERC1271Digest(
+        address canonicalUEA,
+        string memory chainNs,
+        string memory chainId,
+        address registryAddr,
+        uint256 shadowAgentId,
+        uint256 nonce,
+        uint256 deadline
+    ) internal view returns (bytes32) {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                SHADOW_LINK_TYPEHASH,
+                canonicalUEA,
+                keccak256(bytes(chainNs)),
+                keccak256(bytes(chainId)),
+                registryAddr,
+                shadowAgentId,
+                nonce,
+                deadline
+            )
+        );
+        return keccak256(
+            abi.encodePacked(
+                "\x19\x01", _getDomainSeparator(), structHash
+            )
+        );
+    }
+
+    function test_LinkShadow_ERC1271_ValidSignature() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet();
+        (address walletUEA,) = _setupERC1271Agent(wallet);
+
+        address shadowReg =
+            address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory proofData = _erc1271ProofData(
+            walletUEA, bytes("dummy-sig")
+        );
+
+        vm.prank(walletUEA);
+        registry.linkShadow(
+            IUAIRegistry.ShadowLinkRequest({
+                chainNamespace: "eip155",
+                chainId: "1",
+                registryAddress: shadowReg,
+                shadowAgentId: 100,
+                proofType: IUAIRegistry
+                    .ShadowProofType
+                    .OWNER_KEY_SIGNED,
+                proofData: proofData,
+                nonce: 1,
+                deadline: deadline
+            })
+        );
+
+        uint256 walletAgentId = uint256(uint160(walletUEA));
+        IUAIRegistry.ShadowEntry[] memory shadows =
+            registry.getShadows(walletAgentId);
+        assertEq(shadows.length, 1);
+        assertEq(shadows[0].shadowAgentId, 100);
+    }
+
+    function test_LinkShadow_ERC1271_Reverts_ReturnsFalse() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet();
+        wallet.setRevert(true);
+        (address walletUEA,) = _setupERC1271Agent(wallet);
+
+        address shadowReg =
+            address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory proofData = _erc1271ProofData(
+            walletUEA, bytes("dummy-sig")
+        );
+
+        vm.prank(walletUEA);
+        vm.expectRevert(InvalidShadowSignature.selector);
+        registry.linkShadow(
+            IUAIRegistry.ShadowLinkRequest({
+                chainNamespace: "eip155",
+                chainId: "1",
+                registryAddress: shadowReg,
+                shadowAgentId: 100,
+                proofType: IUAIRegistry
+                    .ShadowProofType
+                    .OWNER_KEY_SIGNED,
+                proofData: proofData,
+                nonce: 1,
+                deadline: deadline
+            })
+        );
+    }
+
+    function test_LinkShadow_ERC1271_BadMagic_Reverts() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet();
+        wallet.setReturnBadMagic(true);
+        (address walletUEA,) = _setupERC1271Agent(wallet);
+
+        address shadowReg =
+            address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        bytes memory proofData = _erc1271ProofData(
+            walletUEA, bytes("dummy-sig")
+        );
+
+        vm.prank(walletUEA);
+        vm.expectRevert(InvalidShadowSignature.selector);
+        registry.linkShadow(
+            IUAIRegistry.ShadowLinkRequest({
+                chainNamespace: "eip155",
+                chainId: "1",
+                registryAddress: shadowReg,
+                shadowAgentId: 100,
+                proofType: IUAIRegistry
+                    .ShadowProofType
+                    .OWNER_KEY_SIGNED,
+                proofData: proofData,
+                nonce: 1,
+                deadline: deadline
+            })
+        );
     }
 }
