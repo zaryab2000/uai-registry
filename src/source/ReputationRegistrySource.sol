@@ -79,7 +79,7 @@ contract ReputationRegistrySource is
     //  Storage
     // ──────────────────────────────────────────────
 
-    /// @custom:storage-location erc7201:agentgraph.reputation.source
+    /// @custom:storage-location erc7201:tap.reputation.source
     struct ReputationSourceStorage {
         address gatewayAdapter;
         address settlementRegistry;
@@ -95,9 +95,9 @@ contract ReputationRegistrySource is
     }
 
     // keccak256(abi.encode(uint256(keccak256(
-    //   "agentgraph.reputation.source")) - 1)) & ~bytes32(uint256(0xff))
+    //   "tap.reputation.source")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_SLOT =
-        0x48b3ed8006293b84cc75560b8f9b061cac45710afcdefb3feba9b575f7e80a00;
+        0x023d42bdfed6adc516cadabfd4abdbd65c911821d913efae11187d7c0e0c0f00;
 
     function _getStorage() private pure returns (ReputationSourceStorage storage s) {
         bytes32 slot = STORAGE_SLOT;

@@ -68,7 +68,7 @@ contract ReputationRegistry is
     //  ERC-7201 namespaced storage
     // ──────────────────────────────────────────────
 
-    /// @custom:storage-location erc7201:agentgraph.reputation.storage
+    /// @custom:storage-location erc7201:tap.reputation.storage
     struct ReputationRegistryStorage {
         mapping(uint256 => AggregatedReputation) aggregated;
         mapping(uint256 => mapping(bytes32 => ChainReputation)) chainReputations;
@@ -80,10 +80,10 @@ contract ReputationRegistry is
         address agentRegistry;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("agentgraph.reputation.storage")) - 1))
+    // keccak256(abi.encode(uint256(keccak256("tap.reputation.storage")) - 1))
     //   & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_SLOT =
-        0xb67861f8610ba7b280c2ed92ad7bea4b114932d67697dbe598601e1297e05100;
+        0x09e00015682a58e0492fcd039d3aa8486a464512777fa9b0afa9eb03e4da8a00;
 
     function _getStorage() private pure returns (ReputationRegistryStorage storage s) {
         bytes32 slot = STORAGE_SLOT;

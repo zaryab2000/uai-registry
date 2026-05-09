@@ -1151,9 +1151,9 @@ contract ReputationRegistryTest is Test {
 
     function test_StorageSlot_MatchesERC7201Formula() public pure {
         bytes32 expected = keccak256(
-            abi.encode(uint256(keccak256("agentgraph.reputation.storage")) - 1)
+            abi.encode(uint256(keccak256("tap.reputation.storage")) - 1)
         ) & ~bytes32(uint256(0xff));
 
-        assertEq(expected, 0xb67861f8610ba7b280c2ed92ad7bea4b114932d67697dbe598601e1297e05100);
+        assertEq(expected, 0x09e00015682a58e0492fcd039d3aa8486a464512777fa9b0afa9eb03e4da8a00);
     }
 }

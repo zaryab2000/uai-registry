@@ -111,7 +111,7 @@ Agent identities are non-transferable. The contract implements the ERC-721 trans
 AgentRegistry uses ERC-7201 namespaced storage for upgrade safety. All state lives in a single storage struct at a deterministic slot:
 
 ```
-STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("agentgraph.registry.storage")) - 1))
+STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.registry.storage")) - 1))
                 & ~bytes32(uint256(0xff))
 ```
 

@@ -516,7 +516,7 @@ This detects that the Arbitrum binding no longer exists, removes Arbitrum reputa
 ReputationRegistry uses ERC-7201 namespaced storage at:
 
 ```
-STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("agentgraph.reputation.storage")) - 1))
+STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.reputation.storage")) - 1))
                 & ~bytes32(uint256(0xff))
 ```
 

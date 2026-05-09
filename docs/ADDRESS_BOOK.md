@@ -1,6 +1,6 @@
 # Address Book
 
-Deployed contract addresses for AgentGraph. Update this file after every deployment or upgrade.
+Deployed contract addresses for TAP. Update this file after every deployment or upgrade.
 
 ---
 

@@ -66,7 +66,7 @@ contract IdentityRegistrySource is
     //  Storage
     // ──────────────────────────────────────────────
 
-    /// @custom:storage-location erc7201:agentgraph.identity.source
+    /// @custom:storage-location erc7201:tap.identity.source
     struct IdentityPlusStorage {
         address gatewayAdapter;
         address settlementRegistry;
@@ -77,9 +77,9 @@ contract IdentityRegistrySource is
     }
 
     // keccak256(abi.encode(uint256(keccak256(
-    //   "agentgraph.identity.source")) - 1)) & ~bytes32(uint256(0xff))
+    //   "tap.identity.source")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_SLOT =
-        0xfb6f5e13b2041d58d3a146c3f8fa16a96932e97a0b81ae67143238ef2158ce00;
+        0xe1adeacf4e59eb60226d0a04b9e5b5fa5b75c96c05082353d562ac7bd6333000;
 
     function _getStorage() private pure returns (IdentityPlusStorage storage s) {
         bytes32 slot = STORAGE_SLOT;

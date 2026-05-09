@@ -60,7 +60,7 @@ contract AgentRegistry is
     //  ERC-7201 namespaced storage
     // ──────────────────────────────────────────────
 
-    /// @custom:storage-location erc7201:agentgraph.registry.storage
+    /// @custom:storage-location erc7201:tap.registry.storage
     struct AgentRegistryStorage {
         mapping(uint256 => AgentRecord) records;
         mapping(uint256 => BindEntry[]) bindings;
@@ -70,10 +70,10 @@ contract AgentRegistry is
         mapping(uint256 => mapping(uint256 => bool)) usedNonces;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("agentgraph.registry.storage")) - 1))
+    // keccak256(abi.encode(uint256(keccak256("tap.registry.storage")) - 1))
     //   & ~bytes32(uint256(0xff))
     bytes32 private constant STORAGE_SLOT =
-        0xf37f1d7c5752967bda44eaab6131ed8a290372309eed64688fb601f4ced83600;
+        0x058d5531a4d48d6b2756a26de7bf5dc8cee5997c802aa85f245da9412ca74a00;
 
     function _getStorage() private pure returns (AgentRegistryStorage storage s) {
         bytes32 slot = STORAGE_SLOT;
@@ -99,7 +99,7 @@ contract AgentRegistry is
     ) external initializer {
         __AccessControl_init();
         __Pausable_init();
-        __EIP712_init("AgentGraph", "1");
+        __EIP712_init("TAP", "1");
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
     }

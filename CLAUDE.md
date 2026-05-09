@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AgentRegistry is an ERC-8004-compatible Universal Agent Identity Registry on Push Chain. It uses Universal Executor Account (UEA) addresses as canonical, chain-agnostic agent identifiers. Per-chain ERC-8004 registries become "bound registries" linked to the canonical UEA via EIP-712 signatures. Identity tokens are soulbound (non-transferable), with `agentId = uint256(uint160(ueaAddress))`.
+TAP (Trustless Agents Plus) is an ERC-8004-compatible Universal Agent Identity Registry on Push Chain. It uses Universal Executor Account (UEA) addresses as canonical, chain-agnostic agent identifiers. Per-chain ERC-8004 registries become "bound registries" linked to the canonical UEA via EIP-712 signatures. Identity tokens are soulbound (non-transferable), with `agentId = uint256(uint160(ueaAddress))`.
 
 The ReputationRegistry is a cross-chain agent reputation aggregator that collects per-chain reputation snapshots from authorized reporters and computes aggregated scores keyed to canonical UEA identities.
 
@@ -12,7 +12,7 @@ The ReputationRegistry is a cross-chain agent reputation aggregator that collect
 
 ```bash
 forge build                    # compile
-forge test                     # all tests (189 passing: unit, binding, fuzz, integration, source-chain)
+forge test                     # all tests (211 passing: unit, binding, fuzz, integration, source-chain)
 forge test -vv                 # verbose output
 forge test --gas-report        # with gas reporting
 forge fmt                      # format
