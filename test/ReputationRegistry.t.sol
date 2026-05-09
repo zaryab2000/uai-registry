@@ -19,7 +19,10 @@ import {
     EmptyBatch,
     InvalidDecimals,
     InvalidUAIRegistryAddress,
-    MaxSlashRecordsExceeded
+    MaxSlashRecordsExceeded,
+    SummaryValueOutOfRange,
+    TooManyChainKeys,
+    InvalidInitializationAddress
 } from "src/libraries/ReputationErrors.sol";
 import {
     TransparentUpgradeableProxy
@@ -1080,6 +1083,190 @@ contract ReputationRegistryTest is Test {
     }
 
     // ──────────────────────────────────────────────
+    //  Audit Fix: summaryValue bounds (M-4 / C-1)
+    // ──────────────────────────────────────────────
+
+    function test_SubmitReputation_SummaryValueTooHigh_Reverts() public {
+        IReputationRegistry.ReputationSubmission memory sub =
+            _defaultSubmission();
+        sub.summaryValue = 101 * 1e18;
+        vm.prank(reporter);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SummaryValueOutOfRange.selector,
+                int128(101 * 1e18),
+                int128(100 * 1e18)
+            )
+        );
+        repRegistry.submitReputation(sub);
+    }
+
+    function test_SubmitReputation_SummaryValueTooLow_Reverts() public {
+        IReputationRegistry.ReputationSubmission memory sub =
+            _defaultSubmission();
+        sub.summaryValue = -101 * 1e18;
+        vm.prank(reporter);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SummaryValueOutOfRange.selector,
+                int128(-101 * 1e18),
+                int128(100 * 1e18)
+            )
+        );
+        repRegistry.submitReputation(sub);
+    }
+
+    function test_SubmitReputation_SummaryValueAtBoundary_Succeeds()
+        public
+    {
+        IReputationRegistry.ReputationSubmission memory sub =
+            _defaultSubmission();
+        sub.summaryValue = 100 * 1e18;
+        vm.prank(reporter);
+        repRegistry.submitReputation(sub);
+
+        sub.summaryValue = -100 * 1e18;
+        sub.sourceBlockNumber = 2000;
+        vm.prank(reporter);
+        repRegistry.submitReputation(sub);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Audit Fix: chainKeys cap (M-1)
+    // ──────────────────────────────────────────────
+
+    function test_SubmitReputation_TooManyChainKeys_Reverts() public {
+        // setUp already links 3 shadows. Fill to 64 shadows with data.
+        _submitForChain(
+            "eip155", "1", SHADOW_REGISTRY_ETH, 42, 10,
+            50 * 1e18, 1000
+        );
+        _submitForChain(
+            "eip155", "8453", SHADOW_REGISTRY_BASE, 17, 10,
+            50 * 1e18, 1000
+        );
+        _submitForChain(
+            "eip155", "42161", SHADOW_REGISTRY_ARB, 8, 10,
+            50 * 1e18, 1000
+        );
+        for (uint256 i = 4; i <= 64; i++) {
+            string memory cid = vm.toString(i);
+            address shadowReg = address(uint160(0xBEEF0000 + i));
+            _linkShadow("eip155", cid, shadowReg, i, i + 100);
+            _submitForChain(
+                "eip155", cid, shadowReg, i, 10, 50 * 1e18, 1000
+            );
+        }
+
+        // Now unlink one shadow to free a slot in UAIRegistry,
+        // then link a new shadow on a different chain.
+        // The chain key from the old shadow still persists in
+        // ReputationRegistry, so we now have 64 chain keys and
+        // the 65th will exceed the cap.
+        vm.prank(ueaUser);
+        uaiRegistry.unlinkShadow("eip155", "4", address(uint160(0xBEEF0004)));
+
+        string memory cid65 = "65";
+        address shadowReg65 = address(uint160(0xBEEF0041));
+        _linkShadow("eip155", cid65, shadowReg65, 65, 200);
+
+        IReputationRegistry.ReputationSubmission memory sub =
+            IReputationRegistry.ReputationSubmission({
+                agentId: agentId,
+                chainNamespace: "eip155",
+                chainId: cid65,
+                registryAddress: shadowReg65,
+                shadowAgentId: 65,
+                feedbackCount: 10,
+                summaryValue: 50 * 1e18,
+                valueDecimals: 18,
+                positiveCount: 5,
+                negativeCount: 5,
+                sourceBlockNumber: 1000
+            });
+        vm.prank(reporter);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TooManyChainKeys.selector, agentId, 64
+            )
+        );
+        repRegistry.submitReputation(sub);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Audit Fix: reaggregate pauseable (H-3)
+    // ──────────────────────────────────────────────
+
+    function test_Reaggregate_WhenPaused_Reverts() public {
+        _submitForChain(
+            "eip155", "1", SHADOW_REGISTRY_ETH, 42, 100,
+            90 * 1e18, 1000
+        );
+
+        vm.prank(pauser);
+        repRegistry.pause();
+
+        vm.expectRevert();
+        repRegistry.reaggregate(agentId);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Audit Fix: slash updates lastAggregated (M-2)
+    // ──────────────────────────────────────────────
+
+    function test_Slash_UpdatesLastAggregated() public {
+        _submitForChain(
+            "eip155", "1", SHADOW_REGISTRY_ETH, 42, 100,
+            90 * 1e18, 1000
+        );
+
+        uint64 tsBeforeSlash =
+            repRegistry.getAggregatedReputation(agentId).lastAggregated;
+
+        vm.warp(block.timestamp + 100);
+
+        vm.prank(slasher);
+        repRegistry.slash(
+            agentId, "eip155", "1", "test", keccak256("e"), 500
+        );
+
+        uint64 tsAfterSlash =
+            repRegistry.getAggregatedReputation(agentId).lastAggregated;
+
+        assertGt(tsAfterSlash, tsBeforeSlash);
+    }
+
+    // ──────────────────────────────────────────────
+    //  Audit Fix: initialize zero-address (H-4)
+    // ──────────────────────────────────────────────
+
+    function test_Initialize_ZeroAdmin_Reverts() public {
+        ReputationRegistry impl = new ReputationRegistry();
+        vm.expectRevert(InvalidInitializationAddress.selector);
+        new TransparentUpgradeableProxy(
+            address(impl),
+            admin,
+            abi.encodeCall(
+                ReputationRegistry.initialize,
+                (address(0), pauser, address(uaiRegistry))
+            )
+        );
+    }
+
+    function test_Initialize_ZeroPauser_Reverts() public {
+        ReputationRegistry impl = new ReputationRegistry();
+        vm.expectRevert(InvalidInitializationAddress.selector);
+        new TransparentUpgradeableProxy(
+            address(impl),
+            admin,
+            abi.encodeCall(
+                ReputationRegistry.initialize,
+                (admin, address(0), address(uaiRegistry))
+            )
+        );
+    }
+
+    // ──────────────────────────────────────────────
     //  ERC-165
     // ──────────────────────────────────────────────
 
@@ -1096,6 +1283,23 @@ contract ReputationRegistryTest is Test {
             repRegistry.supportsInterface(
                 type(IAccessControl).interfaceId
             )
+        );
+    }
+
+    // ──────────────────────────────────────────────
+    //  ERC-7201 Storage Slot Verification
+    // ──────────────────────────────────────────────
+
+    function test_StorageSlot_MatchesERC7201Formula() public pure {
+        bytes32 expected = keccak256(
+            abi.encode(
+                uint256(keccak256("reputationregistry.storage")) - 1
+            )
+        ) & ~bytes32(uint256(0xff));
+
+        assertEq(
+            expected,
+            0xe070097f04227be86f6bce14fa1fa3a34d6ed0171b77fb88539672b7cff99400
         );
     }
 }

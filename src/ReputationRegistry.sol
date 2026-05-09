@@ -10,6 +10,9 @@ import {
 import {
     PausableUpgradeable
 } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {
+    SafeCast
+} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {IUAIRegistry} from "./interfaces/IUAIRegistry.sol";
 import {IReputationRegistry} from "./IReputationRegistry.sol";
@@ -24,7 +27,10 @@ import {
     EmptyBatch,
     InvalidDecimals,
     InvalidUAIRegistryAddress,
-    MaxSlashRecordsExceeded
+    InvalidInitializationAddress,
+    MaxSlashRecordsExceeded,
+    SummaryValueOutOfRange,
+    TooManyChainKeys
 } from "./libraries/ReputationErrors.sol";
 
 /// @title ReputationRegistry
@@ -51,6 +57,7 @@ contract ReputationRegistry is
 
     uint256 public constant MAX_BATCH_SIZE = 50;
     uint256 public constant MAX_SLASH_RECORDS = 256;
+    uint256 public constant MAX_CHAIN_KEYS = 64;
     uint8 public constant MAX_DECIMALS = 18;
     uint256 public constant MAX_BPS = 10_000;
 
@@ -110,6 +117,9 @@ contract ReputationRegistry is
         address pauser,
         address uaiRegistryAddr
     ) external initializer {
+        if (admin == address(0) || pauser == address(0)) {
+            revert InvalidInitializationAddress();
+        }
         if (uaiRegistryAddr == address(0)) {
             revert InvalidUAIRegistryAddress();
         }
@@ -229,7 +239,7 @@ contract ReputationRegistry is
     // ──────────────────────────────────────────────
 
     /// @inheritdoc IReputationRegistry
-    function reaggregate(uint256 agentId) external {
+    function reaggregate(uint256 agentId) external whenNotPaused {
         ReputationRegistryStorage storage s = _getStorage();
         IUAIRegistry uaiReg = IUAIRegistry(s.uaiRegistry);
         if (!uaiReg.isRegistered(agentId)) {
@@ -400,6 +410,14 @@ contract ReputationRegistry is
         if (sub.valueDecimals > MAX_DECIMALS) {
             revert InvalidDecimals(sub.valueDecimals);
         }
+        int128 maxAbsolute =
+            int128(int256(100 * int256(10 ** uint256(sub.valueDecimals))));
+        if (
+            sub.summaryValue > maxAbsolute
+                || sub.summaryValue < -maxAbsolute
+        ) {
+            revert SummaryValueOutOfRange(sub.summaryValue, maxAbsolute);
+        }
         if (
             bytes(sub.chainNamespace).length == 0
             || bytes(sub.chainId).length == 0
@@ -440,6 +458,9 @@ contract ReputationRegistry is
                 );
             }
         } else {
+            if (s.chainKeys[sub.agentId].length >= MAX_CHAIN_KEYS) {
+                revert TooManyChainKeys(sub.agentId, MAX_CHAIN_KEYS);
+            }
             s.chainKeys[sub.agentId].push(chainKey);
             s.chainKeyIndex[sub.agentId][chainKey] =
                 s.chainKeys[sub.agentId].length - 1;
@@ -509,10 +530,10 @@ contract ReputationRegistry is
         ReputationRegistryStorage storage s = _getStorage();
 
         int256 weightedSum;
-        uint64 totalCount;
-        uint64 totalPositive;
-        uint64 totalNegative;
-        uint16 chainCount;
+        uint256 totalCount;
+        uint256 totalPositive;
+        uint256 totalNegative;
+        uint256 chainCount;
 
         bytes32[] storage keys = s.chainKeys[agentId];
         for (uint256 i; i < keys.length; i++) {
@@ -532,28 +553,27 @@ contract ReputationRegistry is
         }
 
         AggregatedReputation storage agg = s.aggregated[agentId];
-        agg.totalFeedbackCount = totalCount;
-        agg.totalPositive = totalPositive;
-        agg.totalNegative = totalNegative;
-        agg.chainCount = chainCount;
+        agg.totalFeedbackCount = SafeCast.toUint64(totalCount);
+        agg.totalPositive = SafeCast.toUint64(totalPositive);
+        agg.totalNegative = SafeCast.toUint64(totalNegative);
+        agg.chainCount = SafeCast.toUint16(chainCount);
         agg.valueDecimals = MAX_DECIMALS;
 
         if (totalCount > 0) {
-            agg.weightedAvgValue =
-                int128(weightedSum / int256(uint256(totalCount)));
+            agg.weightedAvgValue = SafeCast.toInt128(
+                weightedSum / int256(totalCount)
+            );
         } else {
             agg.weightedAvgValue = 0;
         }
-
-        agg.lastAggregated = uint64(block.timestamp);
 
         _computeScore(agentId);
 
         emit ReputationAggregated(
             agentId,
-            totalCount,
+            agg.totalFeedbackCount,
             agg.reputationScore,
-            chainCount
+            agg.chainCount
         );
     }
 
@@ -600,6 +620,7 @@ contract ReputationRegistry is
         if (finalScore > MAX_BPS) finalScore = MAX_BPS;
 
         agg.reputationScore = finalScore;
+        agg.lastAggregated = uint64(block.timestamp);
     }
 
     // ──────────────────────────────────────────────

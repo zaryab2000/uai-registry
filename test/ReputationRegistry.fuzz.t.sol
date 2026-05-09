@@ -146,6 +146,8 @@ contract ReputationRegistryFuzzTest is Test {
         uint256 slashSeverity
     ) public {
         feedbackCount = uint64(bound(feedbackCount, 1, type(uint64).max));
+        summaryValue =
+            int128(bound(int256(summaryValue), -100 * 1e18, 100 * 1e18));
         slashSeverity = bound(slashSeverity, 0, 50_000);
 
         vm.prank(reporter);

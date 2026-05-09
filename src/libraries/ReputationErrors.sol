@@ -48,5 +48,16 @@ error InvalidDecimals(uint8 valueDecimals);
 /// @dev Thrown when uaiRegistry address is zero.
 error InvalidUAIRegistryAddress();
 
+/// @dev Thrown when admin or pauser address is zero in initialize().
+error InvalidInitializationAddress();
+
 /// @param agentId The agent that hit the 256-slash cap.
 error MaxSlashRecordsExceeded(uint256 agentId);
+
+/// @param summaryValue The out-of-range value.
+/// @param maxAbsolute The maximum allowed absolute value.
+error SummaryValueOutOfRange(int128 summaryValue, int128 maxAbsolute);
+
+/// @param agentId The agent that hit the chain key cap.
+/// @param max The maximum allowed chain keys.
+error TooManyChainKeys(uint256 agentId, uint256 max);
