@@ -6,7 +6,7 @@ solc = "0.8.26"
 optimizer = true
 optimizer_runs = 10000
 via_ir = false
-evm_version = "cancun"
+evm_version = "shanghai"
 
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
