@@ -69,8 +69,20 @@ bind_chain() {
     local chain_name="$1"
     local chain_id="$2"
     local bound_agent_id="$3"
-    local nonce="$4"
+    local default_nonce="$4"
     local nonce_env_key="$5"
+
+    # Use previously saved nonce + 1 if this chain was bound before
+    local prev_nonce
+    prev_nonce=$(grep "^${nonce_env_key}=" "${ENV_FILE}" 2>/dev/null \
+        | tail -1 | cut -d= -f2)
+    local nonce
+    if [[ -n "${prev_nonce}" ]]; then
+        nonce=$((prev_nonce + 1))
+        echo "  NOTE: ${nonce_env_key}=${prev_nonce} found — using nonce ${nonce}"
+    else
+        nonce="${default_nonce}"
+    fi
 
     echo ""
     echo "=========================================="

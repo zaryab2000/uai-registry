@@ -124,7 +124,7 @@ contract BindExtChain is Script {
         BindParams memory p
     ) internal view {
         address caller = vm.addr(p.signerKey);
-        uint256 agentId = uint256(uint160(caller));
+        uint256 agentId = registry.agentIdOfUEA(caller);
 
         IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(agentId);
 
