@@ -60,7 +60,7 @@ contract AgentRegistryTest is Test {
     }
 
     function test_Register_FirstTime_EmitsRegistered() public {
-        uint256 expectedId = uint256(uint160(ueaUser));
+        uint256 expectedId = uint256(uint160(ueaUser)) % 10_000_000;
 
         vm.expectEmit(true, true, false, true);
         emit IAgentRegistry.Registered(
@@ -117,7 +117,7 @@ contract AgentRegistryTest is Test {
     function test_Register_AgentIdDeterministic() public {
         vm.prank(ueaUser);
         uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
-        assertEq(agentId, uint256(uint160(ueaUser)));
+        assertEq(agentId, uint256(uint160(ueaUser)) % 10_000_000);
     }
 
     function test_Register_OriginMetadataFromFactory() public {
@@ -139,6 +139,19 @@ contract AgentRegistryTest is Test {
         assertTrue(rec.nativeToPush);
         assertEq(rec.originChainNamespace, "push");
         assertEq(rec.originChainId, "42101");
+    }
+
+    function test_Register_Collision_Reverts() public {
+        // 10_000_001 % 10_000_000 == 1 and 20_000_001 % 10_000_000 == 1 — same truncated ID
+        address addr1 = address(uint160(10_000_001));
+        address addr2 = address(uint160(20_000_001));
+
+        vm.prank(addr1);
+        registry.register(AGENT_URI, CARD_HASH);
+
+        vm.prank(addr2);
+        vm.expectRevert(AgentIdCollision.selector);
+        registry.register(AGENT_URI, CARD_HASH);
     }
 
     function test_Register_WhenPaused_Reverts() public {
@@ -167,7 +180,7 @@ contract AgentRegistryTest is Test {
 
     function test_SetAgentURI_NotRegistered_Reverts() public {
         address nobody = makeAddr("nobody");
-        uint256 expectedId = uint256(uint160(nobody));
+        uint256 expectedId = uint256(uint160(nobody)) % 10_000_000;
 
         vm.prank(nobody);
         vm.expectRevert(abi.encodeWithSelector(AgentNotRegistered.selector, expectedId));
@@ -320,7 +333,7 @@ contract AgentRegistryTest is Test {
 
     function test_SetAgentCardHash_NotRegistered_Reverts() public {
         address unregistered = makeAddr("unregistered");
-        uint256 fakeId = uint256(uint160(unregistered));
+        uint256 fakeId = uint256(uint160(unregistered)) % 10_000_000;
         vm.prank(unregistered);
         vm.expectRevert(abi.encodeWithSelector(AgentNotRegistered.selector, fakeId));
         registry.setAgentCardHash(keccak256("card"));

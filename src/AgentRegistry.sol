@@ -31,7 +31,8 @@ import {
     InvalidChainIdentifier,
     InvalidRegistryAddress,
     IdentityNotTransferable,
-    MaxBindingsExceeded
+    MaxBindingsExceeded,
+    AgentIdCollision
 } from "./libraries/Errors.sol";
 
 /// @title AgentRegistry
@@ -64,10 +65,11 @@ contract AgentRegistry is
     struct AgentRegistryStorage {
         mapping(uint256 => AgentRecord) records;
         mapping(uint256 => BindEntry[]) bindings;
-        mapping(bytes32 => uint256) bindToCanonical;
+        mapping(bytes32 => uint256) bindToCanonical; // stores agentId + 1; 0 = not bound
         mapping(uint256 => mapping(bytes32 => uint256)) bindIndex;
         mapping(uint256 => mapping(bytes32 => bool)) bindExists;
         mapping(uint256 => mapping(uint256 => bool)) usedNonces;
+        mapping(address => uint256) ownerToAgentId; // stores agentId + 1; 0 = not registered
     }
 
     // keccak256(abi.encode(uint256(keccak256("tap.registry.storage")) - 1))
@@ -115,18 +117,23 @@ contract AgentRegistry is
     ) external whenNotPaused returns (uint256 agentId) {
         if (agentCardHash == bytes32(0)) revert AgentCardHashRequired();
 
-        agentId = uint256(uint160(msg.sender));
         AgentRegistryStorage storage s = _getStorage();
-        AgentRecord storage record = s.records[agentId];
+        uint256 raw = s.ownerToAgentId[msg.sender];
 
-        if (record.registered) {
+        if (raw != 0) {
+            agentId = raw - 1;
+            AgentRecord storage record = s.records[agentId];
             record.agentURI = _agentURI;
             record.agentCardHash = agentCardHash;
             emit AgentURIUpdated(agentId, _agentURI);
             emit AgentCardHashUpdated(agentId, agentCardHash);
         } else {
+            agentId = uint256(uint160(msg.sender)) % 10_000_000;
+            if (s.records[agentId].registered) revert AgentIdCollision();
+
             (UniversalAccountId memory origin, bool isUEA) = ueaFactory.getOriginForUEA(msg.sender);
 
+            AgentRecord storage record = s.records[agentId];
             record.registered = true;
             record.agentURI = _agentURI;
             record.agentCardHash = agentCardHash;
@@ -135,6 +142,8 @@ contract AgentRegistry is
             record.originChainId = origin.chainId;
             record.ownerKey = origin.owner;
             record.nativeToPush = !isUEA;
+
+            s.ownerToAgentId[msg.sender] = agentId + 1;
 
             emit Registered(
                 agentId,
@@ -152,11 +161,10 @@ contract AgentRegistry is
     function setAgentURI(
         string calldata newAgentURI
     ) external whenNotPaused {
-        uint256 agentId = uint256(uint160(msg.sender));
         AgentRegistryStorage storage s = _getStorage();
-        if (!s.records[agentId].registered) {
-            revert AgentNotRegistered(agentId);
-        }
+        uint256 raw = s.ownerToAgentId[msg.sender];
+        if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
+        uint256 agentId = raw - 1;
         s.records[agentId].agentURI = newAgentURI;
         emit AgentURIUpdated(agentId, newAgentURI);
     }
@@ -166,11 +174,10 @@ contract AgentRegistry is
         bytes32 newHash
     ) external whenNotPaused {
         if (newHash == bytes32(0)) revert AgentCardHashRequired();
-        uint256 agentId = uint256(uint160(msg.sender));
         AgentRegistryStorage storage s = _getStorage();
-        if (!s.records[agentId].registered) {
-            revert AgentNotRegistered(agentId);
-        }
+        uint256 raw = s.ownerToAgentId[msg.sender];
+        if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
+        uint256 agentId = raw - 1;
         s.records[agentId].agentCardHash = newHash;
         emit AgentCardHashUpdated(agentId, newHash);
     }
@@ -183,12 +190,10 @@ contract AgentRegistry is
     function bind(
         BindRequest calldata req
     ) external whenNotPaused {
-        uint256 agentId = uint256(uint160(msg.sender));
         AgentRegistryStorage storage s = _getStorage();
-
-        if (!s.records[agentId].registered) {
-            revert AgentNotRegistered(agentId);
-        }
+        uint256 raw = s.ownerToAgentId[msg.sender];
+        if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
+        uint256 agentId = raw - 1;
         if (bytes(req.chainNamespace).length == 0 || bytes(req.chainId).length == 0) {
             revert InvalidChainIdentifier();
         }
@@ -234,7 +239,7 @@ contract AgentRegistry is
             })
         );
 
-        s.bindToCanonical[dedupKey] = agentId;
+        s.bindToCanonical[dedupKey] = agentId + 1;
 
         bytes32 chainKey =
             keccak256(abi.encode(req.chainNamespace, req.chainId, req.registryAddress));
@@ -258,12 +263,10 @@ contract AgentRegistry is
         string calldata chainId,
         address registryAddress
     ) external whenNotPaused {
-        uint256 agentId = uint256(uint160(msg.sender));
         AgentRegistryStorage storage s = _getStorage();
-
-        if (!s.records[agentId].registered) {
-            revert AgentNotRegistered(agentId);
-        }
+        uint256 raw = s.ownerToAgentId[msg.sender];
+        if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
+        uint256 agentId = raw - 1;
 
         bytes32 chainKey = keccak256(abi.encode(chainNamespace, chainId, registryAddress));
         if (!s.bindExists[agentId][chainKey]) {
@@ -306,10 +309,9 @@ contract AgentRegistry is
     function ownerOf(
         uint256 agentId
     ) external view returns (address) {
-        if (!_getStorage().records[agentId].registered) {
-            revert AgentNotRegistered(agentId);
-        }
-        return address(uint160(agentId));
+        AgentRegistryStorage storage s = _getStorage();
+        if (!s.records[agentId].registered) revert AgentNotRegistered(agentId);
+        return _ownerKeyToAddress(s.records[agentId].ownerKey);
     }
 
     /// @inheritdoc IAgentRegistry
@@ -342,19 +344,18 @@ contract AgentRegistry is
     function canonicalUEA(
         uint256 agentId
     ) external view returns (address) {
-        if (!_getStorage().records[agentId].registered) {
-            revert AgentNotRegistered(agentId);
-        }
-        return address(uint160(agentId));
+        AgentRegistryStorage storage s = _getStorage();
+        if (!s.records[agentId].registered) revert AgentNotRegistered(agentId);
+        return _ownerKeyToAddress(s.records[agentId].ownerKey);
     }
 
     /// @inheritdoc IAgentRegistry
     function agentIdOfUEA(
         address uea
     ) external view returns (uint256) {
-        uint256 agentId = uint256(uint160(uea));
-        if (!_getStorage().records[agentId].registered) return 0;
-        return agentId;
+        uint256 raw = _getStorage().ownerToAgentId[uea];
+        if (raw == 0) return 0;
+        return raw - 1;
     }
 
     /// @inheritdoc IAgentRegistry
@@ -374,12 +375,13 @@ contract AgentRegistry is
         AgentRegistryStorage storage s = _getStorage();
         bytes32 dedupKey =
             keccak256(abi.encode(chainNamespace, chainId, registryAddress, boundAgentId));
-        uint256 agentId = s.bindToCanonical[dedupKey];
-        if (agentId == 0) return (address(0), false);
+        uint256 stored = s.bindToCanonical[dedupKey];
+        if (stored == 0) return (address(0), false);
 
+        uint256 agentId = stored - 1;
         bytes32 chainKey = keccak256(abi.encode(chainNamespace, chainId, registryAddress));
         uint256 idx = s.bindIndex[agentId][chainKey];
-        return (address(uint160(agentId)), s.bindings[agentId][idx].verified);
+        return (_ownerKeyToAddress(s.records[agentId].ownerKey), s.bindings[agentId][idx].verified);
     }
 
     /// @inheritdoc IAgentRegistry
@@ -490,7 +492,7 @@ contract AgentRegistry is
         bytes32 digest = _hashTypedDataV4(structHash);
 
         AgentRegistryStorage storage s = _getStorage();
-        uint256 agentId = uint256(uint160(canonicalUEAAddr));
+        uint256 agentId = s.ownerToAgentId[canonicalUEAAddr] - 1; // caller verified registration
         address expectedSigner = _ownerKeyToAddress(s.records[agentId].ownerKey);
 
         (address recovered, ECDSA.RecoverError err,) = ECDSA.tryRecover(digest, req.proofData);

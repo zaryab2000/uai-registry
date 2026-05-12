@@ -22,6 +22,7 @@ contract AgentRegistryBindTest is Test {
     uint256 public ueaUserKey;
     address public shadowOwner;
     uint256 public shadowOwnerKey;
+    uint256 public ueaAgentId;
 
     bytes32 constant CARD_HASH = keccak256("agent-card");
     string constant AGENT_URI = "ipfs://QmTest";
@@ -50,7 +51,7 @@ contract AgentRegistryBindTest is Test {
         registry = AgentRegistry(address(proxy));
 
         vm.prank(ueaUser);
-        registry.register(AGENT_URI, CARD_HASH);
+        ueaAgentId = registry.register(AGENT_URI, CARD_HASH);
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
@@ -165,7 +166,7 @@ contract AgentRegistryBindTest is Test {
         vm.prank(ueaUser);
         registry.bind(req);
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 1);
         assertEq(bindings[0].chainNamespace, "eip155");
         assertEq(bindings[0].chainId, "1");
@@ -175,7 +176,7 @@ contract AgentRegistryBindTest is Test {
 
     function test_Bind_EmitsEvent() public {
         IAgentRegistry.BindRequest memory req = _defaultReq(1);
-        uint256 agentId = uint256(uint160(ueaUser));
+        uint256 agentId = ueaAgentId;
 
         vm.expectEmit(true, false, false, true);
         emit IAgentRegistry.AgentBound(
@@ -198,7 +199,7 @@ contract AgentRegistryBindTest is Test {
 
         vm.prank(nobody);
         vm.expectRevert(
-            abi.encodeWithSelector(AgentNotRegistered.selector, uint256(uint160(nobody)))
+            abi.encodeWithSelector(AgentNotRegistered.selector, uint256(uint160(nobody)) % 10_000_000)
         );
         registry.bind(req);
     }
@@ -405,7 +406,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_MaxBindingsExceeded_Reverts() public {
-        uint256 agentId = uint256(uint160(ueaUser));
+        uint256 agentId = ueaAgentId;
 
         vm.startPrank(ueaUser);
         for (uint256 i = 0; i < 64; i++) {
@@ -484,7 +485,7 @@ contract AgentRegistryBindTest is Test {
         }
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 64);
     }
 
@@ -548,7 +549,7 @@ contract AgentRegistryBindTest is Test {
         registry.bind(req3);
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 3);
         assertEq(bindings[0].boundAgentId, 42);
         assertEq(bindings[1].boundAgentId, 17);
@@ -568,7 +569,7 @@ contract AgentRegistryBindTest is Test {
         registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 0);
 
         (address canonical,) = registry.canonicalUEAFromBinding(
@@ -579,7 +580,7 @@ contract AgentRegistryBindTest is Test {
 
     function test_Unbind_EmitsEvent() public {
         IAgentRegistry.BindRequest memory req = _defaultReq(1);
-        uint256 agentId = uint256(uint160(ueaUser));
+        uint256 agentId = ueaAgentId;
 
         vm.startPrank(ueaUser);
         registry.bind(req);
@@ -598,7 +599,7 @@ contract AgentRegistryBindTest is Test {
 
         vm.prank(nobody);
         vm.expectRevert(
-            abi.encodeWithSelector(AgentNotRegistered.selector, uint256(uint160(nobody)))
+            abi.encodeWithSelector(AgentNotRegistered.selector, uint256(uint160(nobody)) % 10_000_000)
         );
         registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
     }
@@ -646,7 +647,7 @@ contract AgentRegistryBindTest is Test {
         registry.bind(req2);
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 1);
         assertEq(bindings[0].boundAgentId, 42);
     }
@@ -703,7 +704,7 @@ contract AgentRegistryBindTest is Test {
         registry.unbind("eip155", "8453", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 2);
         assertEq(bindings[0].boundAgentId, 42);
         // Last element swapped into middle position
@@ -813,12 +814,12 @@ contract AgentRegistryBindTest is Test {
         registry.bind(req2);
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 2);
     }
 
     function test_GetBindings_EmptyAgent_ReturnsEmpty() public view {
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(ueaUser)));
+        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 0);
     }
 
@@ -873,7 +874,7 @@ contract AgentRegistryBindTest is Test {
 
     function test_Bind_ERC1271_ValidSignature() public {
         MockERC1271Wallet wallet = new MockERC1271Wallet();
-        (address walletUEA,) = _setupERC1271Agent(wallet);
+        (address walletUEA, uint256 walletAgentId) = _setupERC1271Agent(wallet);
 
         address shadowReg = address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
         uint256 deadline = block.timestamp + 1 hours;
@@ -894,7 +895,6 @@ contract AgentRegistryBindTest is Test {
             })
         );
 
-        uint256 walletAgentId = uint256(uint160(walletUEA));
         IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(walletAgentId);
         assertEq(bindings.length, 1);
         assertEq(bindings[0].boundAgentId, 100);

@@ -13,13 +13,15 @@ import {
     InvalidChainIdentifier,
     InvalidRegistryAddress,
     IdentityNotTransferable,
-    MaxBindingsExceeded
+    MaxBindingsExceeded,
+    AgentIdCollision
 } from "../libraries/Errors.sol";
 
 /// @title IAgentRegistry
 /// @notice ERC-8004-compatible Universal Agent Identity Registry on Push Chain.
 ///         Uses UEA addresses as canonical agent identifiers.
-///         agentId = uint256(uint160(ueaAddress)) — deterministic, collision-free.
+///         agentId = uint256(uint160(ueaAddress)) % 10_000_000 — 7-digit, deterministic.
+///         Collision guard reverts if two addresses share the same truncated ID.
 ///         Non-transferable (soulbound).
 interface IAgentRegistry {
     // ──────────────────────────────────────────────
@@ -115,9 +117,10 @@ interface IAgentRegistry {
     /// @notice Register a new agent identity or update an existing one.
     /// @dev On first call, creates a record with origin metadata from the UEA factory.
     ///      Subsequent calls update `agentURI` and `agentCardHash` only.
+    ///      Reverts with `AgentIdCollision` if another address already holds the same 7-digit ID.
     /// @param agentURI Metadata URI (e.g. IPFS CID) for the agent card.
     /// @param agentCardHash Keccak-256 hash of the agent card content.
-    /// @return agentId Deterministic ID derived as `uint256(uint160(msg.sender))`.
+    /// @return agentId Deterministic 7-digit ID derived as `uint256(uint160(msg.sender)) % 10_000_000`.
     function register(
         string calldata agentURI,
         bytes32 agentCardHash
@@ -190,7 +193,7 @@ interface IAgentRegistry {
 
     /// @notice Return the canonical UEA address for an agent ID.
     /// @param agentId The agent identifier.
-    /// @return The UEA address (identical to `address(uint160(agentId))`).
+    /// @return The UEA address recovered from the stored owner key.
     function canonicalUEA(
         uint256 agentId
     ) external view returns (address);
