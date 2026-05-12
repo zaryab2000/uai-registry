@@ -2,9 +2,9 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
-import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
-import "src/libraries/Errors.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
+import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
+import "src/libraries/RegistryErrors.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
 import {MockERC1271Wallet} from "./mocks/MockERC1271Wallet.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
@@ -12,8 +12,8 @@ import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-contract AgentRegistryBindTest is Test {
-    AgentRegistry public registry;
+contract TAPRegistryBindTest is Test {
+    TAPRegistry public registry;
     MockUEAFactory public factory;
 
     address public admin = makeAddr("admin");
@@ -44,11 +44,11 @@ contract AgentRegistryBindTest is Test {
             })
         );
 
-        AgentRegistry impl = new AgentRegistry(factory);
+        TAPRegistry impl = new TAPRegistry(factory);
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
+            address(impl), admin, abi.encodeCall(TAPRegistry.initialize, (admin, pauser))
         );
-        registry = AgentRegistry(address(proxy));
+        registry = TAPRegistry(address(proxy));
 
         vm.prank(ueaUser);
         ueaAgentId = registry.register(AGENT_URI, CARD_HASH);
@@ -134,13 +134,13 @@ contract AgentRegistryBindTest is Test {
 
     function _defaultReq(
         uint256 nonce
-    ) internal view returns (IAgentRegistry.BindRequest memory) {
-        return IAgentRegistry.BindRequest({
+    ) internal view returns (ITAPRegistry.BindRequest memory) {
+        return ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 42,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -161,12 +161,12 @@ contract AgentRegistryBindTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Bind_ValidSignature_CreatesLink() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.prank(ueaUser);
         registry.bind(req);
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 1);
         assertEq(bindings[0].chainNamespace, "eip155");
         assertEq(bindings[0].chainId, "1");
@@ -175,17 +175,17 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_EmitsEvent() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
         uint256 agentId = ueaAgentId;
 
         vm.expectEmit(true, false, false, true);
-        emit IAgentRegistry.AgentBound(
+        emit ITAPRegistry.AgentBound(
             agentId,
             "eip155",
             "1",
             address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             42,
-            IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             true
         );
 
@@ -195,17 +195,19 @@ contract AgentRegistryBindTest is Test {
 
     function test_Bind_NotRegistered_Reverts() public {
         address nobody = makeAddr("nobody");
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.prank(nobody);
         vm.expectRevert(
-            abi.encodeWithSelector(AgentNotRegistered.selector, uint256(uint160(nobody)) % 10_000_000)
+            abi.encodeWithSelector(
+                AgentNotRegistered.selector, uint256(uint160(nobody)) % 10_000_000
+            )
         );
         registry.bind(req);
     }
 
     function test_Bind_ExpiredDeadline_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
         req.deadline = block.timestamp - 1;
 
         vm.prank(ueaUser);
@@ -214,17 +216,17 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_ReusedNonce_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.startPrank(ueaUser);
         registry.bind(req);
 
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "8453",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 17,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -247,12 +249,12 @@ contract AgentRegistryBindTest is Test {
     function test_Bind_WrongSigner_Reverts() public {
         (, uint256 otherKey) = makeAddrAndKey("otherSigner");
 
-        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 42,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 otherKey,
                 ueaUser,
@@ -273,12 +275,12 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_GarbageSignature_Reverts() public {
-        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 42,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: hex"deadbeef",
             nonce: 1,
             deadline: block.timestamp + 1 hours
@@ -290,7 +292,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_EmptyChainNamespace_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
         req.chainNamespace = "";
 
         vm.prank(ueaUser);
@@ -299,7 +301,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_EmptyChainId_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
         req.chainId = "";
 
         vm.prank(ueaUser);
@@ -308,7 +310,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_ZeroRegistry_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
         req.registryAddress = address(0);
 
         vm.prank(ueaUser);
@@ -317,17 +319,17 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_DuplicateBinding_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.startPrank(ueaUser);
         registry.bind(req);
 
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 42,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -356,7 +358,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Bind_DifferentAgentSameBinding_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.prank(ueaUser);
         registry.bind(req);
@@ -372,12 +374,12 @@ contract AgentRegistryBindTest is Test {
         registry.register(AGENT_URI, CARD_HASH);
 
         (, uint256 signer2Key) = makeAddrAndKey("signer2");
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 42,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 signer2Key,
                 ueaUser2,
@@ -411,12 +413,12 @@ contract AgentRegistryBindTest is Test {
         vm.startPrank(ueaUser);
         for (uint256 i = 0; i < 64; i++) {
             string memory chainId = vm.toString(i + 100);
-            IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: chainId,
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
                 boundAgentId: i,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: _signBindProper(
                     ueaUserKey,
                     ueaUser,
@@ -433,12 +435,12 @@ contract AgentRegistryBindTest is Test {
             registry.bind(req);
         }
 
-        IAgentRegistry.BindRequest memory req65 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req65 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "999",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 999,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -462,12 +464,12 @@ contract AgentRegistryBindTest is Test {
         vm.startPrank(ueaUser);
         for (uint256 i = 0; i < 64; i++) {
             string memory chainId = vm.toString(i + 100);
-            IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: chainId,
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
                 boundAgentId: i,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: _signBindProper(
                     ueaUserKey,
                     ueaUser,
@@ -485,7 +487,7 @@ contract AgentRegistryBindTest is Test {
         }
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 64);
     }
 
@@ -493,7 +495,7 @@ contract AgentRegistryBindTest is Test {
         vm.prank(pauser);
         registry.pause();
 
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.prank(ueaUser);
         vm.expectRevert();
@@ -503,15 +505,15 @@ contract AgentRegistryBindTest is Test {
     function test_Bind_MultipleBindings_AllStored() public {
         vm.startPrank(ueaUser);
 
-        IAgentRegistry.BindRequest memory req1 = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req1 = _defaultReq(1);
         registry.bind(req1);
 
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "8453",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 17,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -527,12 +529,12 @@ contract AgentRegistryBindTest is Test {
         });
         registry.bind(req2);
 
-        IAgentRegistry.BindRequest memory req3 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req3 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "42161",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 8,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -549,7 +551,7 @@ contract AgentRegistryBindTest is Test {
         registry.bind(req3);
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 3);
         assertEq(bindings[0].boundAgentId, 42);
         assertEq(bindings[1].boundAgentId, 17);
@@ -561,7 +563,7 @@ contract AgentRegistryBindTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Unbind_Owner_RemovesLink() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.startPrank(ueaUser);
         registry.bind(req);
@@ -569,7 +571,7 @@ contract AgentRegistryBindTest is Test {
         registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 0);
 
         (address canonical,) = registry.canonicalUEAFromBinding(
@@ -579,14 +581,14 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Unbind_EmitsEvent() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
         uint256 agentId = ueaAgentId;
 
         vm.startPrank(ueaUser);
         registry.bind(req);
 
         vm.expectEmit(true, false, false, true);
-        emit IAgentRegistry.AgentUnbound(
+        emit ITAPRegistry.AgentUnbound(
             agentId, "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432)
         );
 
@@ -599,7 +601,9 @@ contract AgentRegistryBindTest is Test {
 
         vm.prank(nobody);
         vm.expectRevert(
-            abi.encodeWithSelector(AgentNotRegistered.selector, uint256(uint160(nobody)) % 10_000_000)
+            abi.encodeWithSelector(
+                AgentNotRegistered.selector, uint256(uint160(nobody)) % 10_000_000
+            )
         );
         registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
     }
@@ -618,19 +622,19 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Unbind_RebindAfterUnbind_Succeeds() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.startPrank(ueaUser);
         registry.bind(req);
 
         registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
 
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 42,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -647,7 +651,7 @@ contract AgentRegistryBindTest is Test {
         registry.bind(req2);
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 1);
         assertEq(bindings[0].boundAgentId, 42);
     }
@@ -655,15 +659,15 @@ contract AgentRegistryBindTest is Test {
     function test_Unbind_SwapAndPop_Preserves() public {
         vm.startPrank(ueaUser);
 
-        IAgentRegistry.BindRequest memory req1 = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req1 = _defaultReq(1);
         registry.bind(req1);
 
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "8453",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 17,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -679,12 +683,12 @@ contract AgentRegistryBindTest is Test {
         });
         registry.bind(req2);
 
-        IAgentRegistry.BindRequest memory req3 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req3 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "42161",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 8,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -704,7 +708,7 @@ contract AgentRegistryBindTest is Test {
         registry.unbind("eip155", "8453", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 2);
         assertEq(bindings[0].boundAgentId, 42);
         // Last element swapped into middle position
@@ -718,7 +722,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_Unbind_WhenPaused_Reverts() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.prank(ueaUser);
         registry.bind(req);
@@ -736,7 +740,7 @@ contract AgentRegistryBindTest is Test {
     // ──────────────────────────────────────────────
 
     function test_CanonicalUEAFromBinding_LinkedAgent_ReturnsUEA() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.prank(ueaUser);
         registry.bind(req);
@@ -749,7 +753,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_CanonicalUEAFromBinding_VerifiedFlag() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.prank(ueaUser);
         registry.bind(req);
@@ -769,7 +773,7 @@ contract AgentRegistryBindTest is Test {
     }
 
     function test_CanonicalUEAFromBinding_AfterUnbind_ReturnsZero() public {
-        IAgentRegistry.BindRequest memory req = _defaultReq(1);
+        ITAPRegistry.BindRequest memory req = _defaultReq(1);
 
         vm.startPrank(ueaUser);
         registry.bind(req);
@@ -792,12 +796,12 @@ contract AgentRegistryBindTest is Test {
         vm.startPrank(ueaUser);
         registry.bind(_defaultReq(1));
 
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "8453",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: 17,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: _signBindProper(
                 ueaUserKey,
                 ueaUser,
@@ -814,12 +818,12 @@ contract AgentRegistryBindTest is Test {
         registry.bind(req2);
         vm.stopPrank();
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 2);
     }
 
     function test_GetBindings_EmptyAgent_ReturnsEmpty() public view {
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 0);
     }
 
@@ -883,19 +887,19 @@ contract AgentRegistryBindTest is Test {
 
         vm.prank(walletUEA);
         registry.bind(
-            IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: shadowReg,
                 boundAgentId: 100,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: proofData,
                 nonce: 1,
                 deadline: deadline
             })
         );
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(walletAgentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(walletAgentId);
         assertEq(bindings.length, 1);
         assertEq(bindings[0].boundAgentId, 100);
     }
@@ -913,12 +917,12 @@ contract AgentRegistryBindTest is Test {
         vm.prank(walletUEA);
         vm.expectRevert(InvalidBindSignature.selector);
         registry.bind(
-            IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: shadowReg,
                 boundAgentId: 100,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: proofData,
                 nonce: 1,
                 deadline: deadline
@@ -939,12 +943,12 @@ contract AgentRegistryBindTest is Test {
         vm.prank(walletUEA);
         vm.expectRevert(InvalidBindSignature.selector);
         registry.bind(
-            IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: shadowReg,
                 boundAgentId: 100,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: proofData,
                 nonce: 1,
                 deadline: deadline

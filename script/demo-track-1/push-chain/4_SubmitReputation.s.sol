@@ -2,12 +2,12 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {ReputationRegistry} from "src/ReputationRegistry.sol";
-import {IReputationRegistry} from "src/interfaces/IReputationRegistry.sol";
+import {TAPReputationRegistry} from "src/TAPReputationRegistry.sol";
+import {ITAPReputationRegistry} from "src/interfaces/ITAPReputationRegistry.sol";
 
 /// @title 4_SubmitReputation
 /// @notice Submits a per-chain reputation snapshot to Push Chain's
-///         ReputationRegistry. Called by the Deployer (REPORTER_ROLE).
+///         TAPReputationRegistry. Called by the Deployer (REPORTER_ROLE).
 ///
 /// Usage:
 ///   AGENT_ID=<id> CHAIN_ID=11155111 BOUND_AGENT_ID=<id> \
@@ -18,7 +18,7 @@ import {IReputationRegistry} from "src/interfaces/IReputationRegistry.sol";
 ///     --rpc-url $PC_RPC --broadcast -vvvv
 ///
 /// Env vars required:
-///   REPUTATION_REGISTRY - ReputationRegistry proxy address
+///   REPUTATION_REGISTRY - TAPReputationRegistry proxy address
 ///   ERC8004_IDENTITY    - ERC-8004 registry address on source chain
 ///   AGENT_ID            - Canonical agent ID on Push Chain
 ///   CHAIN_ID            - Source chain CAIP-2 chain ID
@@ -43,7 +43,7 @@ contract SubmitReputation is Script {
 
         int128 summaryValue = int128(int256(summaryRaw * 1e18));
 
-        ReputationRegistry repRegistry = ReputationRegistry(repRegistryAddr);
+        TAPReputationRegistry repRegistry = TAPReputationRegistry(repRegistryAddr);
 
         string memory chainLabel = _chainLabel(chainId);
 
@@ -59,8 +59,8 @@ contract SubmitReputation is Script {
         _log("Source Block", vm.toString(sourceBlock));
         _separator();
 
-        IReputationRegistry.ReputationSubmission memory sub =
-            IReputationRegistry.ReputationSubmission({
+        ITAPReputationRegistry.ReputationSubmission memory sub =
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: chainId,
@@ -79,7 +79,7 @@ contract SubmitReputation is Script {
         vm.stopBroadcast();
 
         uint256 score = repRegistry.getReputationScore(agentId);
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
 
         _header("REPUTATION RESULT");

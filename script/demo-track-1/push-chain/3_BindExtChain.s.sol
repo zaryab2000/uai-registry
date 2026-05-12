@@ -2,8 +2,8 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
-import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
+import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
 
 /// @title 3_BindExtChain
 /// @notice Binds an external chain's ERC-8004 agent identity to the
@@ -17,7 +17,7 @@ import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
 ///     --rpc-url $PC_RPC --broadcast -vvvv
 ///
 /// Env vars required:
-///   AGENT_REGISTRY    - AgentRegistry proxy address
+///   AGENT_REGISTRY    - TAPRegistry proxy address
 ///   ERC8004_IDENTITY  - Registry address on the source chain
 ///   CHAIN_NS          - CAIP-2 namespace (e.g. "eip155")
 ///   CHAIN_ID          - CAIP-2 chain ID (e.g. "11155111")
@@ -47,14 +47,14 @@ contract BindExtChain is Script {
 
         bytes memory signature = _signBind(p);
 
-        AgentRegistry registry = AgentRegistry(p.registryAddr);
+        TAPRegistry registry = TAPRegistry(p.registryAddr);
 
-        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
             chainNamespace: p.chainNs,
             chainId: p.chainId,
             registryAddress: p.sourceRegistry,
             boundAgentId: p.boundAgentId,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: signature,
             nonce: p.nonce,
             deadline: p.deadline
@@ -81,7 +81,7 @@ contract BindExtChain is Script {
     function _signBind(
         BindParams memory p
     ) internal view returns (bytes memory) {
-        AgentRegistry registry = AgentRegistry(p.registryAddr);
+        TAPRegistry registry = TAPRegistry(p.registryAddr);
         address caller = vm.addr(p.signerKey);
 
         bytes32 domainSep = _domainSeparator(registry);
@@ -120,13 +120,13 @@ contract BindExtChain is Script {
     }
 
     function _printResult(
-        AgentRegistry registry,
+        TAPRegistry registry,
         BindParams memory p
     ) internal view {
         address caller = vm.addr(p.signerKey);
         uint256 agentId = registry.agentIdOfUEA(caller);
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(agentId);
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(agentId);
 
         _header("BIND RESULT");
         _log("Status", "SUCCESS");
@@ -158,7 +158,7 @@ contract BindExtChain is Script {
     }
 
     function _domainSeparator(
-        AgentRegistry registry
+        TAPRegistry registry
     ) internal view returns (bytes32) {
         (, string memory name, string memory version, uint256 cId, address verifyingContract,,) =
             registry.eip712Domain();

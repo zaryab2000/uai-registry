@@ -48,7 +48,7 @@ const client = createPublicClient({
 
 // ── ABIs ────────────────────────────────────────────────
 
-const agentRegistryAbi = [
+const TAPRegistryAbi = [
   {
     name: "getAgentRecord",
     type: "function",
@@ -116,7 +116,7 @@ const agentRegistryAbi = [
   },
 ];
 
-const reputationRegistryAbi = [
+const TAPReputationRegistryAbi = [
   {
     name: "getReputationScore",
     type: "function",
@@ -263,49 +263,49 @@ const [record, uea, bindings, score, agg, chains, slashes, fresh1h] =
   await Promise.all([
     client.readContract({
       address: AGENT_REGISTRY,
-      abi: agentRegistryAbi,
+      abi: TAPRegistryAbi,
       functionName: "getAgentRecord",
       args: [agentId],
     }),
     client.readContract({
       address: AGENT_REGISTRY,
-      abi: agentRegistryAbi,
+      abi: TAPRegistryAbi,
       functionName: "canonicalUEA",
       args: [agentId],
     }),
     client.readContract({
       address: AGENT_REGISTRY,
-      abi: agentRegistryAbi,
+      abi: TAPRegistryAbi,
       functionName: "getBindings",
       args: [agentId],
     }),
     client.readContract({
       address: REPUTATION_REGISTRY,
-      abi: reputationRegistryAbi,
+      abi: TAPReputationRegistryAbi,
       functionName: "getReputationScore",
       args: [agentId],
     }),
     client.readContract({
       address: REPUTATION_REGISTRY,
-      abi: reputationRegistryAbi,
+      abi: TAPReputationRegistryAbi,
       functionName: "getAggregatedReputation",
       args: [agentId],
     }),
     client.readContract({
       address: REPUTATION_REGISTRY,
-      abi: reputationRegistryAbi,
+      abi: TAPReputationRegistryAbi,
       functionName: "getAllChainReputations",
       args: [agentId],
     }),
     client.readContract({
       address: REPUTATION_REGISTRY,
-      abi: reputationRegistryAbi,
+      abi: TAPReputationRegistryAbi,
       functionName: "getSlashRecords",
       args: [agentId],
     }),
     client.readContract({
       address: REPUTATION_REGISTRY,
-      abi: reputationRegistryAbi,
+      abi: TAPReputationRegistryAbi,
       functionName: "isFresh",
       args: [agentId, 3600n],
     }),
@@ -317,7 +317,7 @@ const reverseLookups = await Promise.all(
   bindings.map((b) =>
     client.readContract({
       address: AGENT_REGISTRY,
-      abi: agentRegistryAbi,
+      abi: TAPRegistryAbi,
       functionName: "canonicalUEAFromBinding",
       args: [b.chainNamespace, b.chainId, b.registryAddress, b.boundAgentId],
     })

@@ -6,12 +6,12 @@ An ERC-8004-compatible Identity Registry deployed on Push Chain that uses the ag
 
 ## Layout
 
-- `src/AgentRegistry.sol` — main contract (registration, binding, ERC-721 surface, soulbound)
-- `src/interfaces/IAgentRegistry.sol` — interface
+- `src/TAPRegistry.sol` — main contract (registration, binding, ERC-721 surface, soulbound)
+- `src/interfaces/ITAPRegistry.sol` — interface
 - `src/interfaces/IUEAFactory.sol`, `src/libraries/Types.sol` — Push Chain UEA interfaces
 - `test/` — unit, binding, fuzz, fork-based integration tests
 - `script/deploy/` — deployment scripts (`Deploy.s.sol`, `DeployReputation.s.sol`, `VerifyDeployment.s.sol`)
-- `script/upgrade/` — upgrade scripts (`UpgradeAgentRegistry.s.sol`, `UpgradeReputationRegistry.s.sol`)
+- `script/upgrade/` — upgrade scripts (`UpgradeTAPRegistry.s.sol`, `UpgradeTAPReputationRegistry.s.sol`)
 
 ## Build & test
 
@@ -24,7 +24,7 @@ forge test --gas-report
 Integration tests auto-skip unless run against Push Chain Donut testnet:
 
 ```bash
-forge test --match-path test/AgentRegistry.integration.t.sol \
+forge test --match-path test/TAPRegistry.integration.t.sol \
     --fork-url $PUSH_CHAIN_RPC -vv
 ```
 

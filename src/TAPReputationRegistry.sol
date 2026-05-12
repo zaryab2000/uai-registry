@@ -10,8 +10,8 @@ import {
 } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
-import {IReputationRegistry} from "./interfaces/IReputationRegistry.sol";
+import {ITAPRegistry} from "./interfaces/ITAPRegistry.sol";
+import {ITAPReputationRegistry} from "./interfaces/ITAPReputationRegistry.sol";
 import {
     AgentNotRegisteredForReputation,
     StaleSubmission,
@@ -22,19 +22,19 @@ import {
     BatchTooLarge,
     EmptyBatch,
     InvalidDecimals,
-    InvalidAgentRegistryAddress,
+    InvalidTAPRegistryAddress,
     InvalidInitializationAddress,
     MaxSlashRecordsExceeded,
     SummaryValueOutOfRange,
     TooManyChainKeys
 } from "./libraries/ReputationErrors.sol";
 
-/// @title ReputationRegistry
+/// @title TAPReputationRegistry
 /// @notice Cross-chain agent reputation aggregator on Push Chain.
 ///         Collects per-chain reputation snapshots from authorized reporters
-///         and computes aggregated scores keyed to canonical UEA via AgentRegistry.
-contract ReputationRegistry is
-    IReputationRegistry,
+///         and computes aggregated scores keyed to canonical UEA via TAPRegistry.
+contract TAPReputationRegistry is
+    ITAPReputationRegistry,
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable
@@ -69,7 +69,7 @@ contract ReputationRegistry is
     // ──────────────────────────────────────────────
 
     /// @custom:storage-location erc7201:tap.reputation.storage
-    struct ReputationRegistryStorage {
+    struct TAPReputationRegistryStorage {
         mapping(uint256 => AggregatedReputation) aggregated;
         mapping(uint256 => mapping(bytes32 => ChainReputation)) chainReputations;
         mapping(uint256 => bytes32[]) chainKeys;
@@ -77,7 +77,7 @@ contract ReputationRegistry is
         mapping(uint256 => mapping(bytes32 => bool)) chainKeyExists;
         mapping(uint256 => SlashRecord[]) slashRecords;
         mapping(uint256 => uint256) totalSlashSeverity;
-        address agentRegistry;
+        address TAPRegistry;
     }
 
     // keccak256(abi.encode(uint256(keccak256("tap.reputation.storage")) - 1))
@@ -85,7 +85,7 @@ contract ReputationRegistry is
     bytes32 private constant STORAGE_SLOT =
         0x09e00015682a58e0492fcd039d3aa8486a464512777fa9b0afa9eb03e4da8a00;
 
-    function _getStorage() private pure returns (ReputationRegistryStorage storage s) {
+    function _getStorage() private pure returns (TAPReputationRegistryStorage storage s) {
         bytes32 slot = STORAGE_SLOT;
         assembly {
             s.slot := slot
@@ -100,20 +100,20 @@ contract ReputationRegistry is
         _disableInitializers();
     }
 
-    /// @notice Initialize the ReputationRegistry proxy.
+    /// @notice Initialize the TAPReputationRegistry proxy.
     /// @param admin Address receiving DEFAULT_ADMIN_ROLE.
     /// @param pauser Address receiving PAUSER_ROLE.
-    /// @param agentRegistryAddr Address of the deployed AgentRegistry proxy.
+    /// @param TAPRegistryAddr Address of the deployed TAPRegistry proxy.
     function initialize(
         address admin,
         address pauser,
-        address agentRegistryAddr
+        address TAPRegistryAddr
     ) external initializer {
         if (admin == address(0) || pauser == address(0)) {
             revert InvalidInitializationAddress();
         }
-        if (agentRegistryAddr == address(0)) {
-            revert InvalidAgentRegistryAddress();
+        if (TAPRegistryAddr == address(0)) {
+            revert InvalidTAPRegistryAddress();
         }
 
         __AccessControl_init();
@@ -122,14 +122,14 @@ contract ReputationRegistry is
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
 
-        _getStorage().agentRegistry = agentRegistryAddr;
+        _getStorage().TAPRegistry = TAPRegistryAddr;
     }
 
     // ──────────────────────────────────────────────
     //  Write — Submission
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function submitReputation(
         ReputationSubmission calldata submission
     ) external onlyRole(REPORTER_ROLE) whenNotPaused {
@@ -137,7 +137,7 @@ contract ReputationRegistry is
         _reaggregate(submission.agentId);
     }
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function batchSubmitReputation(
         ReputationSubmission[] calldata submissions
     ) external onlyRole(REPORTER_ROLE) whenNotPaused {
@@ -174,7 +174,7 @@ contract ReputationRegistry is
     //  Write — Slashing
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function slash(
         uint256 agentId,
         string calldata chainNamespace,
@@ -190,8 +190,8 @@ contract ReputationRegistry is
             revert InvalidChainIdentifierReputation();
         }
 
-        ReputationRegistryStorage storage s = _getStorage();
-        IAgentRegistry agentReg = IAgentRegistry(s.agentRegistry);
+        TAPReputationRegistryStorage storage s = _getStorage();
+        ITAPRegistry agentReg = ITAPRegistry(s.TAPRegistry);
         if (!agentReg.isRegistered(agentId)) {
             revert AgentNotRegisteredForReputation(agentId);
         }
@@ -221,17 +221,17 @@ contract ReputationRegistry is
     //  Write — Reaggregation
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function reaggregate(
         uint256 agentId
     ) external whenNotPaused {
-        ReputationRegistryStorage storage s = _getStorage();
-        IAgentRegistry agentReg = IAgentRegistry(s.agentRegistry);
+        TAPReputationRegistryStorage storage s = _getStorage();
+        ITAPRegistry agentReg = ITAPRegistry(s.TAPRegistry);
         if (!agentReg.isRegistered(agentId)) {
             revert AgentNotRegisteredForReputation(agentId);
         }
 
-        IAgentRegistry.BindEntry[] memory entries = agentReg.getBindings(agentId);
+        ITAPRegistry.BindEntry[] memory entries = agentReg.getBindings(agentId);
 
         uint256 keyLen = s.chainKeys[agentId].length;
         uint256 i;
@@ -267,17 +267,17 @@ contract ReputationRegistry is
     //  Write — Admin
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IReputationRegistry
-    function setAgentRegistry(
-        address newAgentRegistry
+    /// @inheritdoc ITAPReputationRegistry
+    function setTAPRegistry(
+        address newTAPRegistry
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newAgentRegistry == address(0)) {
-            revert InvalidAgentRegistryAddress();
+        if (newTAPRegistry == address(0)) {
+            revert InvalidTAPRegistryAddress();
         }
-        ReputationRegistryStorage storage s = _getStorage();
-        address oldAddr = s.agentRegistry;
-        s.agentRegistry = newAgentRegistry;
-        emit AgentRegistryUpdated(oldAddr, newAgentRegistry);
+        TAPReputationRegistryStorage storage s = _getStorage();
+        address oldAddr = s.TAPRegistry;
+        s.TAPRegistry = newTAPRegistry;
+        emit TAPRegistryUpdated(oldAddr, newTAPRegistry);
     }
 
     // ──────────────────────────────────────────────
@@ -296,14 +296,14 @@ contract ReputationRegistry is
     //  Reads
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function getAggregatedReputation(
         uint256 agentId
     ) external view returns (AggregatedReputation memory) {
         return _getStorage().aggregated[agentId];
     }
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function getChainReputation(
         uint256 agentId,
         string calldata chainNamespace,
@@ -313,11 +313,11 @@ contract ReputationRegistry is
         return _getStorage().chainReputations[agentId][chainKey];
     }
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function getAllChainReputations(
         uint256 agentId
     ) external view returns (ChainReputation[] memory) {
-        ReputationRegistryStorage storage s = _getStorage();
+        TAPReputationRegistryStorage storage s = _getStorage();
         bytes32[] storage keys = s.chainKeys[agentId];
         uint256 len = keys.length;
         ChainReputation[] memory result = new ChainReputation[](len);
@@ -327,21 +327,21 @@ contract ReputationRegistry is
         return result;
     }
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function getReputationScore(
         uint256 agentId
     ) external view returns (uint256) {
         return _getStorage().aggregated[agentId].reputationScore;
     }
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function getSlashRecords(
         uint256 agentId
     ) external view returns (SlashRecord[] memory) {
         return _getStorage().slashRecords[agentId];
     }
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function isFresh(
         uint256 agentId,
         uint256 maxAge
@@ -351,16 +351,16 @@ contract ReputationRegistry is
         return block.timestamp - lastAgg <= maxAge;
     }
 
-    /// @inheritdoc IReputationRegistry
+    /// @inheritdoc ITAPReputationRegistry
     function lastUpdated(
         uint256 agentId
     ) external view returns (uint64) {
         return _getStorage().aggregated[agentId].lastAggregated;
     }
 
-    /// @inheritdoc IReputationRegistry
-    function getAgentRegistry() external view returns (address) {
-        return _getStorage().agentRegistry;
+    /// @inheritdoc ITAPReputationRegistry
+    function getTAPRegistry() external view returns (address) {
+        return _getStorage().TAPRegistry;
     }
 
     // ──────────────────────────────────────────────
@@ -370,7 +370,7 @@ contract ReputationRegistry is
     function supportsInterface(
         bytes4 interfaceId
     ) public view override(AccessControlUpgradeable) returns (bool) {
-        return interfaceId == type(IReputationRegistry).interfaceId
+        return interfaceId == type(ITAPReputationRegistry).interfaceId
             || super.supportsInterface(interfaceId);
     }
 
@@ -396,8 +396,8 @@ contract ReputationRegistry is
             revert InvalidRegistryAddressReputation();
         }
 
-        ReputationRegistryStorage storage s = _getStorage();
-        IAgentRegistry agentReg = IAgentRegistry(s.agentRegistry);
+        TAPReputationRegistryStorage storage s = _getStorage();
+        ITAPRegistry agentReg = ITAPRegistry(s.TAPRegistry);
 
         if (!agentReg.isRegistered(sub.agentId)) {
             revert AgentNotRegisteredForReputation(sub.agentId);
@@ -457,8 +457,8 @@ contract ReputationRegistry is
         string calldata chainNamespace,
         string calldata chainId
     ) internal view {
-        IAgentRegistry agentReg = IAgentRegistry(_getStorage().agentRegistry);
-        IAgentRegistry.BindEntry[] memory entries = agentReg.getBindings(agentId);
+        ITAPRegistry agentReg = ITAPRegistry(_getStorage().TAPRegistry);
+        ITAPRegistry.BindEntry[] memory entries = agentReg.getBindings(agentId);
 
         bytes32 targetNsHash = keccak256(bytes(chainNamespace));
         bytes32 targetIdHash = keccak256(bytes(chainId));
@@ -482,7 +482,7 @@ contract ReputationRegistry is
     function _reaggregate(
         uint256 agentId
     ) internal {
-        ReputationRegistryStorage storage s = _getStorage();
+        TAPReputationRegistryStorage storage s = _getStorage();
 
         int256 weightedSum;
         uint256 totalCount;
@@ -531,7 +531,7 @@ contract ReputationRegistry is
     function _computeScore(
         uint256 agentId
     ) internal {
-        ReputationRegistryStorage storage s = _getStorage();
+        TAPReputationRegistryStorage storage s = _getStorage();
         AggregatedReputation storage agg = s.aggregated[agentId];
 
         int256 normalizedAvg = int256(agg.weightedAvgValue);
@@ -577,7 +577,7 @@ contract ReputationRegistry is
         uint256 agentId,
         bytes32 chainKey
     ) internal {
-        ReputationRegistryStorage storage s = _getStorage();
+        TAPReputationRegistryStorage storage s = _getStorage();
 
         uint256 idx = s.chainKeyIndex[agentId][chainKey];
         uint256 lastIdx = s.chainKeys[agentId].length - 1;
@@ -602,20 +602,13 @@ contract ReputationRegistry is
         uint256 x
     ) internal pure returns (uint256 r) {
         if (x <= 1) return 0;
-        if (x >= 1 << 128) x >>= 128;
-        r += 128;
-        if (x >= 1 << 64) x >>= 64;
-        r += 64;
-        if (x >= 1 << 32) x >>= 32;
-        r += 32;
-        if (x >= 1 << 16) x >>= 16;
-        r += 16;
-        if (x >= 1 << 8) x >>= 8;
-        r += 8;
-        if (x >= 1 << 4) x >>= 4;
-        r += 4;
-        if (x >= 1 << 2) x >>= 2;
-        r += 2;
-        if (x >= 1 << 1) r += 1;
+        if (x >= 1 << 128) { x >>= 128; r += 128; }
+        if (x >= 1 << 64) { x >>= 64; r += 64; }
+        if (x >= 1 << 32) { x >>= 32; r += 32; }
+        if (x >= 1 << 16) { x >>= 16; r += 16; }
+        if (x >= 1 << 8) { x >>= 8; r += 8; }
+        if (x >= 1 << 4) { x >>= 4; r += 4; }
+        if (x >= 1 << 2) { x >>= 2; r += 2; }
+        if (x >= 1 << 1) { r += 1; }
     }
 }

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-/// @title IReputationRegistry
+/// @title ITAPReputationRegistry
 /// @notice Cross-chain agent reputation aggregator on Push Chain.
 ///         Stores per-chain reputation snapshots submitted by authorized reporters
-///         and computes aggregated scores keyed to canonical UEA via AgentRegistry.
-interface IReputationRegistry {
+///         and computes aggregated scores keyed to canonical UEA via TAPRegistry.
+interface ITAPReputationRegistry {
     // ──────────────────────────────────────────────
     //  Types
     // ──────────────────────────────────────────────
@@ -96,8 +96,8 @@ interface IReputationRegistry {
         address indexed reporter
     );
 
-    /// @notice Emitted when the AgentRegistry address is updated.
-    event AgentRegistryUpdated(address indexed oldAddr, address indexed newAddr);
+    /// @notice Emitted when the TAPRegistry address is updated.
+    event TAPRegistryUpdated(address indexed oldAddr, address indexed newAddr);
 
     // ──────────────────────────────────────────────
     //  Write Functions
@@ -105,7 +105,7 @@ interface IReputationRegistry {
 
     /// @notice Submit or update per-chain reputation for an agent.
     /// @dev Only callable by REPORTER_ROLE. Validates agent registration
-    ///      and binding existence in AgentRegistry. Recomputes aggregate.
+    ///      and binding existence in TAPRegistry. Recomputes aggregate.
     /// @param submission The reputation data to submit.
     function submitReputation(
         ReputationSubmission calldata submission
@@ -143,11 +143,11 @@ interface IReputationRegistry {
         uint256 agentId
     ) external;
 
-    /// @notice Update the AgentRegistry address.
+    /// @notice Update the TAPRegistry address.
     /// @dev Only callable by DEFAULT_ADMIN_ROLE.
-    /// @param newAgentRegistry The new AgentRegistry proxy address.
-    function setAgentRegistry(
-        address newAgentRegistry
+    /// @param newTAPRegistry The new TAPRegistry proxy address.
+    function setTAPRegistry(
+        address newTAPRegistry
     ) external;
 
     // ──────────────────────────────────────────────
@@ -209,7 +209,7 @@ interface IReputationRegistry {
         uint256 agentId
     ) external view returns (uint64);
 
-    /// @notice Get the current AgentRegistry address.
-    /// @return The AgentRegistry contract address.
-    function getAgentRegistry() external view returns (address);
+    /// @notice Get the current TAPRegistry address.
+    /// @return The TAPRegistry contract address.
+    function getTAPRegistry() external view returns (address);
 }

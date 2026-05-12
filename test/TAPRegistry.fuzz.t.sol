@@ -2,17 +2,17 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
-import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
-import "src/libraries/Errors.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
+import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
+import "src/libraries/RegistryErrors.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
 import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-contract AgentRegistryFuzz is Test {
-    AgentRegistry public registry;
+contract TAPRegistryFuzz is Test {
+    TAPRegistry public registry;
     MockUEAFactory public factory;
 
     address public admin = makeAddr("admin");
@@ -31,11 +31,11 @@ contract AgentRegistryFuzz is Test {
 
     function setUp() public {
         factory = new MockUEAFactory();
-        AgentRegistry impl = new AgentRegistry(factory);
+        TAPRegistry impl = new TAPRegistry(factory);
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
+            address(impl), admin, abi.encodeCall(TAPRegistry.initialize, (admin, pauser))
         );
-        registry = AgentRegistry(address(proxy));
+        registry = TAPRegistry(address(proxy));
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
@@ -139,12 +139,12 @@ contract AgentRegistryFuzz is Test {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, digest);
 
-        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: "1",
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: boundAgentId,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: abi.encodePacked(r, s, v),
             nonce: 1,
             deadline: block.timestamp + 1 hours
@@ -182,12 +182,12 @@ contract AgentRegistryFuzz is Test {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(callerKey, digest);
 
-        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: chainId,
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: boundAgentId,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: abi.encodePacked(r, s, v),
             nonce: 1,
             deadline: block.timestamp + 1 hours
@@ -211,12 +211,12 @@ contract AgentRegistryFuzz is Test {
         digest = keccak256(abi.encodePacked("\x19\x01", _getDomainSeparator(), structHash));
         (v, r, s) = vm.sign(callerKey, digest);
 
-        IAgentRegistry.BindRequest memory req2 = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req2 = ITAPRegistry.BindRequest({
             chainNamespace: "eip155",
             chainId: chainId,
             registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
             boundAgentId: boundAgentId,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: abi.encodePacked(r, s, v),
             nonce: 2,
             deadline: block.timestamp + 1 hours
@@ -253,12 +253,12 @@ contract AgentRegistryFuzz is Test {
 
         vm.startPrank(caller);
         registry.bind(
-            IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
                 boundAgentId: boundAgentId,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 1,
                 deadline: block.timestamp + 1 hours
@@ -283,12 +283,12 @@ contract AgentRegistryFuzz is Test {
         (v, r, s) = vm.sign(callerKey, digest);
 
         registry.bind(
-            IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
                 boundAgentId: boundAgentId,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 2,
                 deadline: block.timestamp + 1 hours
@@ -328,12 +328,12 @@ contract AgentRegistryFuzz is Test {
 
         vm.startPrank(caller);
         registry.bind(
-            IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432),
                 boundAgentId: boundAgentId,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 1,
                 deadline: block.timestamp + 1 hours

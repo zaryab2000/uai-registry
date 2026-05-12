@@ -2,10 +2,10 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
-import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
-import {ReputationRegistry} from "src/ReputationRegistry.sol";
-import {IReputationRegistry} from "src/interfaces/IReputationRegistry.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
+import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
+import {TAPReputationRegistry} from "src/TAPReputationRegistry.sol";
+import {ITAPReputationRegistry} from "src/interfaces/ITAPReputationRegistry.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
 import {
@@ -18,7 +18,7 @@ import {
     BatchTooLarge,
     EmptyBatch,
     InvalidDecimals,
-    InvalidAgentRegistryAddress,
+    InvalidTAPRegistryAddress,
     MaxSlashRecordsExceeded,
     SummaryValueOutOfRange,
     TooManyChainKeys,
@@ -29,9 +29,9 @@ import {
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
-contract ReputationRegistryTest is Test {
-    AgentRegistry public agentRegistry;
-    ReputationRegistry public repRegistry;
+contract TAPReputationRegistryTest is Test {
+    TAPRegistry public tapRegistry;
+    TAPReputationRegistry public repRegistry;
     MockUEAFactory public factory;
 
     address public admin = makeAddr("admin");
@@ -67,19 +67,19 @@ contract ReputationRegistryTest is Test {
             })
         );
 
-        AgentRegistry agentImpl = new AgentRegistry(factory);
+        TAPRegistry agentImpl = new TAPRegistry(factory);
         TransparentUpgradeableProxy agentProxy = new TransparentUpgradeableProxy(
-            address(agentImpl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
+            address(agentImpl), admin, abi.encodeCall(TAPRegistry.initialize, (admin, pauser))
         );
-        agentRegistry = AgentRegistry(address(agentProxy));
+        tapRegistry = TAPRegistry(address(agentProxy));
 
-        ReputationRegistry repImpl = new ReputationRegistry();
+        TAPReputationRegistry repImpl = new TAPReputationRegistry();
         TransparentUpgradeableProxy repProxy = new TransparentUpgradeableProxy(
             address(repImpl),
             admin,
-            abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(agentRegistry)))
+            abi.encodeCall(TAPReputationRegistry.initialize, (admin, pauser, address(tapRegistry)))
         );
-        repRegistry = ReputationRegistry(address(repProxy));
+        repRegistry = TAPReputationRegistry(address(repProxy));
 
         vm.startPrank(admin);
         repRegistry.grantRole(repRegistry.REPORTER_ROLE(), reporter);
@@ -87,7 +87,7 @@ contract ReputationRegistryTest is Test {
         vm.stopPrank();
 
         vm.prank(ueaUser);
-        agentId = agentRegistry.register(AGENT_URI, CARD_HASH);
+        agentId = tapRegistry.register(AGENT_URI, CARD_HASH);
 
         _linkBinding("eip155", "1", REGISTRY_ETH, 42, 1);
         _linkBinding("eip155", "8453", REGISTRY_BASE, 17, 2);
@@ -116,24 +116,24 @@ contract ReputationRegistryTest is Test {
             block.timestamp + 1 hours
         );
 
-        IAgentRegistry.BindRequest memory req = IAgentRegistry.BindRequest({
+        ITAPRegistry.BindRequest memory req = ITAPRegistry.BindRequest({
             chainNamespace: chainNs,
             chainId: chainId,
             registryAddress: registryAddr,
             boundAgentId: boundAgentId,
-            proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+            proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
             proofData: sig,
             nonce: nonce,
             deadline: block.timestamp + 1 hours
         });
 
         vm.prank(ueaUser);
-        agentRegistry.bind(req);
+        tapRegistry.bind(req);
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
         (, string memory name, string memory version, uint256 cId, address vc,,) =
-            agentRegistry.eip712Domain();
+            tapRegistry.eip712Domain();
         return keccak256(
             abi.encode(
                 keccak256(
@@ -206,9 +206,9 @@ contract ReputationRegistryTest is Test {
     function _defaultSubmission()
         internal
         view
-        returns (IReputationRegistry.ReputationSubmission memory)
+        returns (ITAPReputationRegistry.ReputationSubmission memory)
     {
-        return IReputationRegistry.ReputationSubmission({
+        return ITAPReputationRegistry.ReputationSubmission({
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "1",
@@ -232,8 +232,8 @@ contract ReputationRegistryTest is Test {
         int128 summaryValue,
         uint256 sourceBlock
     ) internal {
-        IReputationRegistry.ReputationSubmission memory sub =
-            IReputationRegistry.ReputationSubmission({
+        ITAPReputationRegistry.ReputationSubmission memory sub =
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: chainNs,
                 chainId: chainId,
@@ -256,12 +256,12 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_SubmitReputation_ValidReporter_Stores() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.prank(reporter);
         repRegistry.submitReputation(sub);
 
-        IReputationRegistry.ChainReputation memory cr =
+        ITAPReputationRegistry.ChainReputation memory cr =
             repRegistry.getChainReputation(agentId, "eip155", "1");
         assertEq(cr.feedbackCount, 200);
         assertEq(cr.summaryValue, 92 * 1e18);
@@ -272,10 +272,10 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_EmitsEvent() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.expectEmit(true, true, false, true);
-        emit IReputationRegistry.ReputationSubmitted(
+        emit ITAPReputationRegistry.ReputationSubmitted(
             agentId, "eip155", "1", 200, 92 * 1e18, reporter
         );
 
@@ -284,7 +284,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_NotReporter_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.prank(nobody);
         vm.expectRevert();
@@ -292,7 +292,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_AgentNotRegistered_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.agentId = 999;
 
         vm.prank(reporter);
@@ -301,7 +301,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_BindingNotLinked_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.chainNamespace = "eip155";
         sub.chainId = "137";
 
@@ -311,7 +311,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_StaleBlock_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.prank(reporter);
         repRegistry.submitReputation(sub);
@@ -325,7 +325,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_EqualBlock_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.prank(reporter);
         repRegistry.submitReputation(sub);
@@ -338,7 +338,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_InvalidDecimals_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.valueDecimals = 19;
 
         vm.prank(reporter);
@@ -347,7 +347,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_Update_OverwritesOld() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.prank(reporter);
         repRegistry.submitReputation(sub);
@@ -359,7 +359,7 @@ contract ReputationRegistryTest is Test {
         vm.prank(reporter);
         repRegistry.submitReputation(sub);
 
-        IReputationRegistry.ChainReputation memory cr =
+        ITAPReputationRegistry.ChainReputation memory cr =
             repRegistry.getChainReputation(agentId, "eip155", "1");
         assertEq(cr.feedbackCount, 300);
         assertEq(cr.summaryValue, 95 * 1e18);
@@ -370,7 +370,7 @@ contract ReputationRegistryTest is Test {
         vm.prank(pauser);
         repRegistry.pause();
 
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.prank(reporter);
         vm.expectRevert();
@@ -378,7 +378,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_EmptyChainId_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.chainId = "";
 
         vm.prank(reporter);
@@ -387,7 +387,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_ZeroRegistryAddr_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.registryAddress = address(0);
 
         vm.prank(reporter);
@@ -408,29 +408,29 @@ contract ReputationRegistryTest is Test {
             })
         );
         vm.prank(ueaUser2);
-        uint256 agentId2 = agentRegistry.register("ipfs://test2", CARD_HASH);
+        uint256 agentId2 = tapRegistry.register("ipfs://test2", CARD_HASH);
 
         bytes memory sig2 = _signBind(
             ueaUser2Key, ueaUser2, "eip155", "1", REGISTRY_ETH, 99, 1, block.timestamp + 1 hours
         );
         vm.prank(ueaUser2);
-        agentRegistry.bind(
-            IAgentRegistry.BindRequest({
+        tapRegistry.bind(
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: REGISTRY_ETH,
                 boundAgentId: 99,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: sig2,
                 nonce: 1,
                 deadline: block.timestamp + 1 hours
             })
         );
 
-        IReputationRegistry.ReputationSubmission[] memory subs =
-            new IReputationRegistry.ReputationSubmission[](2);
+        ITAPReputationRegistry.ReputationSubmission[] memory subs =
+            new ITAPReputationRegistry.ReputationSubmission[](2);
         subs[0] = _defaultSubmission();
-        subs[1] = IReputationRegistry.ReputationSubmission({
+        subs[1] = ITAPReputationRegistry.ReputationSubmission({
             agentId: agentId2,
             chainNamespace: "eip155",
             chainId: "1",
@@ -452,10 +452,10 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_BatchSubmit_SameAgent_MultipleChains() public {
-        IReputationRegistry.ReputationSubmission[] memory subs =
-            new IReputationRegistry.ReputationSubmission[](3);
+        ITAPReputationRegistry.ReputationSubmission[] memory subs =
+            new ITAPReputationRegistry.ReputationSubmission[](3);
 
-        subs[0] = IReputationRegistry.ReputationSubmission({
+        subs[0] = ITAPReputationRegistry.ReputationSubmission({
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "1",
@@ -468,7 +468,7 @@ contract ReputationRegistryTest is Test {
             negativeCount: 20,
             sourceBlockNumber: 1000
         });
-        subs[1] = IReputationRegistry.ReputationSubmission({
+        subs[1] = ITAPReputationRegistry.ReputationSubmission({
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "8453",
@@ -481,7 +481,7 @@ contract ReputationRegistryTest is Test {
             negativeCount: 20,
             sourceBlockNumber: 2000
         });
-        subs[2] = IReputationRegistry.ReputationSubmission({
+        subs[2] = ITAPReputationRegistry.ReputationSubmission({
             agentId: agentId,
             chainNamespace: "eip155",
             chainId: "42161",
@@ -498,15 +498,15 @@ contract ReputationRegistryTest is Test {
         vm.prank(reporter);
         repRegistry.batchSubmitReputation(subs);
 
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.totalFeedbackCount, 400);
         assertEq(agg.chainCount, 3);
     }
 
     function test_BatchSubmit_TooLarge_Reverts() public {
-        IReputationRegistry.ReputationSubmission[] memory subs =
-            new IReputationRegistry.ReputationSubmission[](51);
+        ITAPReputationRegistry.ReputationSubmission[] memory subs =
+            new ITAPReputationRegistry.ReputationSubmission[](51);
 
         vm.prank(reporter);
         vm.expectRevert(abi.encodeWithSelector(BatchTooLarge.selector, 51, 50));
@@ -514,8 +514,8 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_BatchSubmit_Empty_Reverts() public {
-        IReputationRegistry.ReputationSubmission[] memory subs =
-            new IReputationRegistry.ReputationSubmission[](0);
+        ITAPReputationRegistry.ReputationSubmission[] memory subs =
+            new ITAPReputationRegistry.ReputationSubmission[](0);
 
         vm.prank(reporter);
         vm.expectRevert(EmptyBatch.selector);
@@ -529,7 +529,7 @@ contract ReputationRegistryTest is Test {
     function test_Aggregation_SingleChain_MatchesSubmission() public {
         _submitForChain("eip155", "1", REGISTRY_ETH, 42, 200, 92 * 1e18, 1000);
 
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.totalFeedbackCount, 200);
         assertEq(agg.weightedAvgValue, 92 * 1e18);
@@ -540,7 +540,7 @@ contract ReputationRegistryTest is Test {
         _submitForChain("eip155", "1", REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
         _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 100, 60 * 1e18, 2000);
 
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.totalFeedbackCount, 300);
 
@@ -549,8 +549,8 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_Aggregation_DifferentDecimals_Normalized() public {
-        IReputationRegistry.ReputationSubmission memory sub1 =
-            IReputationRegistry.ReputationSubmission({
+        ITAPReputationRegistry.ReputationSubmission memory sub1 =
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -567,7 +567,7 @@ contract ReputationRegistryTest is Test {
         vm.prank(reporter);
         repRegistry.submitReputation(sub1);
 
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.valueDecimals, 18);
         assertEq(agg.weightedAvgValue, 90 * 1e18);
@@ -585,7 +585,7 @@ contract ReputationRegistryTest is Test {
         _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
         _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 50, 80 * 1e18, 2000);
 
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.chainCount, 2);
     }
@@ -594,17 +594,17 @@ contract ReputationRegistryTest is Test {
         _submitForChain("eip155", "1", REGISTRY_ETH, 42, 200, 90 * 1e18, 1000);
         _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 100, 80 * 1e18, 2000);
 
-        IReputationRegistry.AggregatedReputation memory aggBefore =
+        ITAPReputationRegistry.AggregatedReputation memory aggBefore =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(aggBefore.chainCount, 2);
         assertEq(aggBefore.totalFeedbackCount, 300);
 
         vm.prank(ueaUser);
-        agentRegistry.unbind("eip155", "8453", REGISTRY_BASE);
+        tapRegistry.unbind("eip155", "8453", REGISTRY_BASE);
 
         repRegistry.reaggregate(agentId);
 
-        IReputationRegistry.AggregatedReputation memory aggAfter =
+        ITAPReputationRegistry.AggregatedReputation memory aggAfter =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(aggAfter.chainCount, 1);
         assertEq(aggAfter.totalFeedbackCount, 200);
@@ -719,7 +719,7 @@ contract ReputationRegistryTest is Test {
         vm.prank(slasher);
         repRegistry.slash(agentId, "eip155", "1", "fraud", keccak256("proof"), 2000);
 
-        IReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
+        ITAPReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
         assertEq(records.length, 1);
         assertEq(records[0].severityBps, 2000);
         assertEq(records[0].reporter, slasher);
@@ -728,7 +728,7 @@ contract ReputationRegistryTest is Test {
 
     function test_Slash_EmitsEvent() public {
         vm.expectEmit(true, true, false, true);
-        emit IReputationRegistry.AgentSlashed(agentId, "eip155", "1", "fraud", 2000, slasher);
+        emit ITAPReputationRegistry.AgentSlashed(agentId, "eip155", "1", "fraud", 2000, slasher);
 
         vm.prank(slasher);
         repRegistry.slash(agentId, "eip155", "1", "fraud", keccak256("proof"), 2000);
@@ -763,7 +763,7 @@ contract ReputationRegistryTest is Test {
         repRegistry.slash(agentId, "eip155", "1", "fraud3", keccak256("e3"), 300);
         vm.stopPrank();
 
-        IReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
+        ITAPReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
         assertEq(records.length, 3);
 
         uint256 scoreAfter = repRegistry.getReputationScore(agentId);
@@ -775,7 +775,7 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_GetAggregated_NoData_ReturnsZero() public view {
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.totalFeedbackCount, 0);
         assertEq(agg.reputationScore, 0);
@@ -784,14 +784,14 @@ contract ReputationRegistryTest is Test {
     function test_GetChainReputation_Exists() public {
         _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
-        IReputationRegistry.ChainReputation memory cr =
+        ITAPReputationRegistry.ChainReputation memory cr =
             repRegistry.getChainReputation(agentId, "eip155", "1");
         assertEq(cr.feedbackCount, 100);
         assertEq(keccak256(bytes(cr.chainNamespace)), keccak256(bytes("eip155")));
     }
 
     function test_GetChainReputation_NotExists_ReturnsZero() public view {
-        IReputationRegistry.ChainReputation memory cr =
+        ITAPReputationRegistry.ChainReputation memory cr =
             repRegistry.getChainReputation(agentId, "eip155", "137");
         assertEq(cr.feedbackCount, 0);
         assertEq(cr.sourceBlockNumber, 0);
@@ -802,7 +802,7 @@ contract ReputationRegistryTest is Test {
         _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 150, 88 * 1e18, 2000);
         _submitForChain("eip155", "42161", REGISTRY_ARB, 8, 50, 95 * 1e18, 3000);
 
-        IReputationRegistry.ChainReputation[] memory all =
+        ITAPReputationRegistry.ChainReputation[] memory all =
             repRegistry.getAllChainReputations(agentId);
         assertEq(all.length, 3);
     }
@@ -811,7 +811,7 @@ contract ReputationRegistryTest is Test {
         _submitForChain("eip155", "1", REGISTRY_ETH, 42, 100, 90 * 1e18, 1000);
 
         uint256 score = repRegistry.getReputationScore(agentId);
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(score, agg.reputationScore);
     }
@@ -839,7 +839,7 @@ contract ReputationRegistryTest is Test {
         repRegistry.slash(agentId, "eip155", "8453", "r2", keccak256("e2"), 200);
         vm.stopPrank();
 
-        IReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
+        ITAPReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
         assertEq(records.length, 2);
         assertEq(records[0].severityBps, 100);
         assertEq(records[1].severityBps, 200);
@@ -849,32 +849,32 @@ contract ReputationRegistryTest is Test {
     //  Admin Tests
     // ──────────────────────────────────────────────
 
-    function test_SetAgentRegistry_Admin_Updates() public {
-        address newAddr = makeAddr("newAgentRegistry");
+    function test_SetTAPRegistry_Admin_Updates() public {
+        address newAddr = makeAddr("newTAPRegistry");
 
         vm.prank(admin);
-        repRegistry.setAgentRegistry(newAddr);
+        repRegistry.setTAPRegistry(newAddr);
 
-        assertEq(repRegistry.getAgentRegistry(), newAddr);
+        assertEq(repRegistry.getTAPRegistry(), newAddr);
     }
 
-    function test_SetAgentRegistry_NonAdmin_Reverts() public {
+    function test_SetTAPRegistry_NonAdmin_Reverts() public {
         vm.prank(nobody);
         vm.expectRevert();
-        repRegistry.setAgentRegistry(makeAddr("newAgentRegistry"));
+        repRegistry.setTAPRegistry(makeAddr("newTAPRegistry"));
     }
 
-    function test_SetAgentRegistry_ZeroAddr_Reverts() public {
+    function test_SetTAPRegistry_ZeroAddr_Reverts() public {
         vm.prank(admin);
-        vm.expectRevert(InvalidAgentRegistryAddress.selector);
-        repRegistry.setAgentRegistry(address(0));
+        vm.expectRevert(InvalidTAPRegistryAddress.selector);
+        repRegistry.setTAPRegistry(address(0));
     }
 
     function test_Pause_Unpause_WorksForPauser() public {
         vm.startPrank(pauser);
         repRegistry.pause();
 
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
 
         vm.stopPrank();
         vm.prank(reporter);
@@ -893,7 +893,7 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_SubmitReputation_SummaryValueTooHigh_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.summaryValue = 101 * 1e18;
         vm.prank(reporter);
         vm.expectRevert(
@@ -905,7 +905,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_SummaryValueTooLow_Reverts() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.summaryValue = -101 * 1e18;
         vm.prank(reporter);
         vm.expectRevert(
@@ -917,7 +917,7 @@ contract ReputationRegistryTest is Test {
     }
 
     function test_SubmitReputation_SummaryValueAtBoundary_Succeeds() public {
-        IReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
+        ITAPReputationRegistry.ReputationSubmission memory sub = _defaultSubmission();
         sub.summaryValue = 100 * 1e18;
         vm.prank(reporter);
         repRegistry.submitReputation(sub);
@@ -944,20 +944,20 @@ contract ReputationRegistryTest is Test {
             _submitForChain("eip155", cid, chainReg, i, 10, 50 * 1e18, 1000);
         }
 
-        // Now unbind one binding to free a slot in AgentRegistry,
+        // Now unbind one binding to free a slot in TAPRegistry,
         // then bind a new binding on a different chain.
         // The chain key from the old binding still persists in
-        // ReputationRegistry, so we now have 64 chain keys and
+        // TAPReputationRegistry, so we now have 64 chain keys and
         // the 65th will exceed the cap.
         vm.prank(ueaUser);
-        agentRegistry.unbind("eip155", "4", address(uint160(0xBEEF0004)));
+        tapRegistry.unbind("eip155", "4", address(uint160(0xBEEF0004)));
 
         string memory cid65 = "65";
         address chainReg65 = address(uint160(0xBEEF0041));
         _linkBinding("eip155", cid65, chainReg65, 65, 200);
 
-        IReputationRegistry.ReputationSubmission memory sub =
-            IReputationRegistry.ReputationSubmission({
+        ITAPReputationRegistry.ReputationSubmission memory sub =
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: cid65,
@@ -1013,25 +1013,25 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_Initialize_ZeroAdmin_Reverts() public {
-        ReputationRegistry impl = new ReputationRegistry();
+        TAPReputationRegistry impl = new TAPReputationRegistry();
         vm.expectRevert(InvalidInitializationAddress.selector);
         new TransparentUpgradeableProxy(
             address(impl),
             admin,
             abi.encodeCall(
-                ReputationRegistry.initialize, (address(0), pauser, address(agentRegistry))
+                TAPReputationRegistry.initialize, (address(0), pauser, address(tapRegistry))
             )
         );
     }
 
     function test_Initialize_ZeroPauser_Reverts() public {
-        ReputationRegistry impl = new ReputationRegistry();
+        TAPReputationRegistry impl = new TAPReputationRegistry();
         vm.expectRevert(InvalidInitializationAddress.selector);
         new TransparentUpgradeableProxy(
             address(impl),
             admin,
             abi.encodeCall(
-                ReputationRegistry.initialize, (admin, address(0), address(agentRegistry))
+                TAPReputationRegistry.initialize, (admin, address(0), address(tapRegistry))
             )
         );
     }
@@ -1040,8 +1040,8 @@ contract ReputationRegistryTest is Test {
     //  ERC-165
     // ──────────────────────────────────────────────
 
-    function test_SupportsInterface_IReputationRegistry() public view {
-        assertTrue(repRegistry.supportsInterface(type(IReputationRegistry).interfaceId));
+    function test_SupportsInterface_ITAPReputationRegistry() public view {
+        assertTrue(repRegistry.supportsInterface(type(ITAPReputationRegistry).interfaceId));
     }
 
     function test_SupportsInterface_IAccessControl() public view {
@@ -1056,11 +1056,11 @@ contract ReputationRegistryTest is Test {
     //  Branch Coverage Tests
     // ──────────────────────────────────────────────
 
-    function test_Initialize_ZeroAgentRegistry_Reverts() public {
-        ReputationRegistry impl = new ReputationRegistry();
+    function test_Initialize_ZeroTAPRegistry_Reverts() public {
+        TAPReputationRegistry impl = new TAPReputationRegistry();
         bytes memory initData =
-            abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(0)));
-        vm.expectRevert(InvalidAgentRegistryAddress.selector);
+            abi.encodeCall(TAPReputationRegistry.initialize, (admin, pauser, address(0)));
+        vm.expectRevert(InvalidTAPRegistryAddress.selector);
         new TransparentUpgradeableProxy(address(impl), admin, initData);
     }
 
@@ -1099,7 +1099,7 @@ contract ReputationRegistryTest is Test {
     function test_Reaggregate_SkipsZeroFeedbackChain() public {
         vm.prank(reporter);
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -1114,7 +1114,7 @@ contract ReputationRegistryTest is Test {
             })
         );
 
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.totalFeedbackCount, 0);
         assertEq(agg.weightedAvgValue, 0);
@@ -1126,21 +1126,21 @@ contract ReputationRegistryTest is Test {
         _submitForChain("eip155", "8453", REGISTRY_BASE, 17, 200, 85e18, 2000);
         _submitForChain("eip155", "42161", REGISTRY_ARB, 8, 150, 88e18, 3000);
 
-        IReputationRegistry.AggregatedReputation memory aggBefore =
+        ITAPReputationRegistry.AggregatedReputation memory aggBefore =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(aggBefore.chainCount, 3);
 
         vm.prank(ueaUser);
-        agentRegistry.unbind("eip155", "1", REGISTRY_ETH);
+        tapRegistry.unbind("eip155", "1", REGISTRY_ETH);
 
         repRegistry.reaggregate(agentId);
 
-        IReputationRegistry.AggregatedReputation memory aggAfter =
+        ITAPReputationRegistry.AggregatedReputation memory aggAfter =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(aggAfter.chainCount, 2);
         assertEq(aggAfter.totalFeedbackCount, 350);
 
-        IReputationRegistry.ChainReputation memory ethRep =
+        ITAPReputationRegistry.ChainReputation memory ethRep =
             repRegistry.getChainReputation(agentId, "eip155", "1");
         assertEq(ethRep.feedbackCount, 0);
     }
@@ -1150,9 +1150,8 @@ contract ReputationRegistryTest is Test {
     // ──────────────────────────────────────────────
 
     function test_StorageSlot_MatchesERC7201Formula() public pure {
-        bytes32 expected = keccak256(
-            abi.encode(uint256(keccak256("tap.reputation.storage")) - 1)
-        ) & ~bytes32(uint256(0xff));
+        bytes32 expected = keccak256(abi.encode(uint256(keccak256("tap.reputation.storage")) - 1))
+            & ~bytes32(uint256(0xff));
 
         assertEq(expected, 0x09e00015682a58e0492fcd039d3aa8486a464512777fa9b0afa9eb03e4da8a00);
     }

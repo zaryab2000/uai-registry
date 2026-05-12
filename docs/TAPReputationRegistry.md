@@ -1,14 +1,12 @@
-# ReputationRegistry
+# TAPReputationRegistry
 
-Cross-Chain Agent Reputation Aggregator on Push Chain.
-
-ReputationRegistry collects per-chain reputation data for AI agents and computes a single, normalized reputation score (0-10,000 basis points) that reflects an agent's performance across every chain it operates on. It works alongside AgentRegistry: where AgentRegistry answers "who is this agent?", ReputationRegistry answers "how trustworthy is this agent?"
+TAP's ReputationRegistry collects per-chain reputation data for AI agents and computes a single, normalized reputation score (0-10,000 basis points) that reflects an agent's performance across every chain it operates on. It works alongside TAPRegistry: where TAPRegistry answers "who is this agent?", TAPReputationRegistry answers "how trustworthy is this agent?"
 
 ---
 
 ## The Problem
 
-ERC-8004 defines per-chain ReputationRegistryUpgradeable contracts. Each chain tracks feedback, ratings, and reputation independently. An agent with a perfect track record on Ethereum has zero reputation on Base until it earns it there from scratch. This creates several problems:
+ERC-8004 defines per-chain TAPReputationRegistryUpgradeable contracts. Each chain tracks feedback, ratings, and reputation independently. An agent with a perfect track record on Ethereum has zero reputation on Base until it earns it there from scratch. This creates several problems:
 
 - **Reputation fragmentation**: An agent's reputation is scattered across chains with no way to see the full picture. A user on Arbitrum has no visibility into an agent's Ethereum track record.
 - **Cold start on every chain**: When an agent expands to a new chain, it starts with zero reputation regardless of years of proven performance elsewhere. Users have no reason to trust it.
@@ -17,9 +15,9 @@ ERC-8004 defines per-chain ReputationRegistryUpgradeable contracts. Each chain t
 
 ---
 
-## How ReputationRegistry Solves It
+## How TAPReputationRegistry Solves It
 
-ReputationRegistry acts as a cross-chain reputation aggregator that:
+TAPReputationRegistry acts as a cross-chain reputation aggregator that:
 
 1. **Collects** per-chain reputation snapshots from authorized reporters
 2. **Normalizes** data across different decimal precisions to a common scale
@@ -32,11 +30,11 @@ ReputationRegistry acts as a cross-chain reputation aggregator that:
 ```
                           Push Chain
                    +--------------------+
-                   | ReputationRegistry |
+                   | TAPReputationRegistry |
                    |  (aggregated score)|
                    +--------+-----------+
                             |
-          reads bindings from AgentRegistry
+          reads bindings from TAPRegistry
                             |
          +------------------+------------------+
          |                  |                  |
@@ -47,25 +45,25 @@ ReputationRegistry acts as a cross-chain reputation aggregator that:
   +--------------+  +--------------+  +--------------+
          |                  |                  |
     off-chain reporters read per-chain data,
-    submit snapshots to ReputationRegistry
+    submit snapshots to TAPReputationRegistry
 ```
 
 The flow:
-1. Per-chain ERC-8004 ReputationRegistryUpgradeable contracts accumulate local feedback.
+1. Per-chain ERC-8004 TAPReputationRegistryUpgradeable contracts accumulate local feedback.
 2. Authorized reporters (off-chain services or relayers) read per-chain reputation data.
-3. Reporters submit snapshots to ReputationRegistry on Push Chain.
-4. ReputationRegistry validates each submission against AgentRegistry bindings (ensuring the agent actually has a linked identity on that chain).
-5. ReputationRegistry normalizes, aggregates, and scores.
+3. Reporters submit snapshots to TAPReputationRegistry on Push Chain.
+4. TAPReputationRegistry validates each submission against TAPRegistry bindings (ensuring the agent actually has a linked identity on that chain).
+5. TAPReputationRegistry normalizes, aggregates, and scores.
 
 ---
 
 ## Novel Features (Beyond ERC-8004)
 
-ERC-8004 defines per-chain reputation storage and explicitly states that "more complex reputation aggregation will happen off-chain." ReputationRegistry moves that aggregation on-chain and introduces several features that do not exist in the base specification.
+ERC-8004 defines per-chain reputation storage and explicitly states that "more complex reputation aggregation will happen off-chain." TAPReputationRegistry moves that aggregation on-chain and introduces several features that do not exist in the base specification.
 
 ### Reputation Score Formula (0-10,000 bps)
 
-ERC-8004 stores raw weighted averages per chain with no composite score. ReputationRegistry computes a single, normalized score from 0 to 10,000 basis points using a multi-factor formula that combines quality, volume, diversity, and slashing into one number. This gives consumers a single value to gate access decisions without interpreting raw data.
+ERC-8004 stores raw weighted averages per chain with no composite score. TAPReputationRegistry computes a single, normalized score from 0 to 10,000 basis points using a multi-factor formula that combines quality, volume, diversity, and slashing into one number. This gives consumers a single value to gate access decisions without interpreting raw data.
 
 ### Diversity Bonus
 
@@ -77,7 +75,7 @@ The score scales the base quality rating by `log2(totalFeedbackCount)`, ranging 
 
 ### Cross-Chain Slashing with Persistent Penalties
 
-ERC-8004 has no slashing mechanism. ReputationRegistry introduces `SLASHER_ROLE` with cumulative severity deductions that persist even if the associated binding is later removed. An agent cannot escape a slash by unbinding from the chain where the incident occurred. Up to 256 slash records are stored per agent with full provenance (chain, reason, evidence hash, timestamp, slasher address).
+ERC-8004 has no slashing mechanism. TAPReputationRegistry introduces `SLASHER_ROLE` with cumulative severity deductions that persist even if the associated binding is later removed. An agent cannot escape a slash by unbinding from the chain where the incident occurred. Up to 256 slash records are stored per agent with full provenance (chain, reason, evidence hash, timestamp, slasher address).
 
 ### Staleness Protection
 
@@ -85,7 +83,7 @@ Each per-chain submission includes a `sourceBlockNumber` that must be strictly g
 
 ### Positive/Negative Sentiment Tracking
 
-ReputationRegistry tracks `positiveCount` and `negativeCount` alongside the `summaryValue`. While these do not factor into the score formula, they provide consumers with sentiment breakdown that ERC-8004's single weighted average does not expose.
+TAPReputationRegistry tracks `positiveCount` and `negativeCount` alongside the `summaryValue`. While these do not factor into the score formula, they provide consumers with sentiment breakdown that ERC-8004's single weighted average does not expose.
 
 ---
 
@@ -93,12 +91,12 @@ ReputationRegistry tracks `positiveCount` and `negativeCount` alongside the `sum
 
 ### Roles
 
-| Role | Purpose |
-|------|---------|
-| `DEFAULT_ADMIN_ROLE` | Grants/revokes roles. Updates AgentRegistry address. |
-| `REPORTER_ROLE` | Submits per-chain reputation snapshots. |
-| `SLASHER_ROLE` | Records slashing events against agents. |
-| `PAUSER_ROLE` | Pauses/unpauses the contract. |
+| Role                 | Purpose                                            |
+| -------------------- | -------------------------------------------------- |
+| `DEFAULT_ADMIN_ROLE` | Grants/revokes roles. Updates TAPRegistry address. |
+| `REPORTER_ROLE`      | Submits per-chain reputation snapshots.            |
+| `SLASHER_ROLE`       | Records slashing events against agents.            |
+| `PAUSER_ROLE`        | Pauses/unpauses the contract.                      |
 
 These are separate roles, not hierarchical. An address can hold multiple roles, but each privilege requires explicit grant.
 
@@ -106,19 +104,19 @@ These are separate roles, not hierarchical. An address can hold multiple roles, 
 
 A reporter submits a `ReputationSubmission` containing:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `agentId` | `uint256` | Canonical agent ID on AgentRegistry |
-| `chainNamespace` | `string` | CAIP-2 namespace (e.g., `"eip155"`) |
-| `chainId` | `string` | CAIP-2 chain ID (e.g., `"1"`) |
-| `registryAddress` | `address` | ERC-8004 registry address on the source chain |
-| `boundAgentId` | `uint256` | Agent's ID on the source chain registry |
-| `feedbackCount` | `uint64` | Total number of feedback entries on that chain |
-| `summaryValue` | `int128` | Weighted average rating (signed, supports negative) |
-| `valueDecimals` | `uint8` | Decimal precision of `summaryValue` (max 18) |
-| `positiveCount` | `uint64` | Number of positive feedback entries |
-| `negativeCount` | `uint64` | Number of negative feedback entries |
-| `sourceBlockNumber` | `uint256` | Block number on the source chain at snapshot time |
+| Field               | Type      | Description                                         |
+| ------------------- | --------- | --------------------------------------------------- |
+| `agentId`           | `uint256` | Canonical agent ID on TAPRegistry                   |
+| `chainNamespace`    | `string`  | CAIP-2 namespace (e.g., `"eip155"`)                 |
+| `chainId`           | `string`  | CAIP-2 chain ID (e.g., `"1"`)                       |
+| `registryAddress`   | `address` | ERC-8004 registry address on the source chain       |
+| `boundAgentId`      | `uint256` | Agent's ID on the source chain registry             |
+| `feedbackCount`     | `uint64`  | Total number of feedback entries on that chain      |
+| `summaryValue`      | `int128`  | Weighted average rating (signed, supports negative) |
+| `valueDecimals`     | `uint8`   | Decimal precision of `summaryValue` (max 18)        |
+| `positiveCount`     | `uint64`  | Number of positive feedback entries                 |
+| `negativeCount`     | `uint64`  | Number of negative feedback entries                 |
+| `sourceBlockNumber` | `uint256` | Block number on the source chain at snapshot time   |
 
 ### Submission Validation
 
@@ -127,8 +125,8 @@ Every submission goes through these checks:
 1. **Decimals**: `valueDecimals` must be <= 18.
 2. **Chain identifiers**: Neither `chainNamespace` nor `chainId` can be empty.
 3. **Registry address**: Cannot be `address(0)`.
-4. **Agent registration**: The `agentId` must be registered in AgentRegistry.
-5. **Binding validation**: The agent must have an active binding to the specified chain. The contract reads all bindings from AgentRegistry and checks that at least one matches the submitted `chainNamespace` and `chainId`.
+4. **Agent registration**: The `agentId` must be registered in TAPRegistry.
+5. **Binding validation**: The agent must have an active binding to the specified chain. The contract reads all bindings from TAPRegistry and checks that at least one matches the submitted `chainNamespace` and `chainId`.
 6. **Staleness protection**: If reputation data already exists for this agent+chain combination, the new submission's `sourceBlockNumber` must be strictly greater than the stored value. This prevents replay attacks and ensures data always moves forward.
 
 ### Data Storage
@@ -187,15 +185,15 @@ volumeMultiplier = 5000 + (log2(totalFeedbackCount) * 500)
 
 Capped at 10,000 (1.0x).
 
-| Total Feedback | log2 | Multiplier |
-|---------------|------|------------|
-| 1 | 0 | 0.50x |
-| 2 | 1 | 0.55x |
-| 4 | 2 | 0.60x |
-| 16 | 4 | 0.70x |
-| 64 | 6 | 0.80x |
-| 256 | 8 | 0.90x |
-| 1,024 | 10 | 1.00x (capped) |
+| Total Feedback | log2 | Multiplier     |
+| -------------- | ---- | -------------- |
+| 1              | 0    | 0.50x          |
+| 2              | 1    | 0.55x          |
+| 4              | 2    | 0.60x          |
+| 16             | 4    | 0.70x          |
+| 64             | 6    | 0.80x          |
+| 256            | 8    | 0.90x          |
+| 1,024          | 10   | 1.00x (capped) |
 
 An agent with only 1 feedback entry gets its base score halved. An agent with 1,024+ entries gets the full base score. This prevents gaming through a small number of positive feedbacks.
 
@@ -210,11 +208,11 @@ diversityBonus = chainCount * 500
 Capped at 2,000 (4 chains max bonus).
 
 | Chains | Bonus |
-|--------|-------|
-| 1 | 500 |
-| 2 | 1,000 |
-| 3 | 1,500 |
-| 4+ | 2,000 |
+| ------ | ----- |
+| 1      | 500   |
+| 2      | 1,000 |
+| 3      | 1,500 |
+| 4+     | 2,000 |
 
 An agent active on 4+ chains gets up to 2,000 additional basis points, reflecting broader ecosystem participation.
 
@@ -294,8 +292,8 @@ Reporters can submit up to 50 reputation snapshots in a single transaction via `
 
 The `reaggregate(agentId)` function is permissionless -- anyone can call it. It:
 
-1. Reads the agent's current bindings from AgentRegistry.
-2. Iterates over stored chain keys and removes any that no longer have a corresponding binding. This handles the case where a binding was removed via AgentRegistry but the reputation data hasn't been cleaned up yet.
+1. Reads the agent's current bindings from TAPRegistry.
+2. Iterates over stored chain keys and removes any that no longer have a corresponding binding. This handles the case where a binding was removed via TAPRegistry but the reputation data hasn't been cleaned up yet.
 3. Recomputes the aggregate and score.
 
 This ensures reputation data stays consistent with the current identity graph. If an agent unbinds from Ethereum, reaggregation removes Ethereum reputation data from the aggregate.
@@ -312,28 +310,28 @@ This returns `true` if the last aggregation was within `maxAge` seconds. Consume
 
 ---
 
-## How ReputationRegistry Works with ERC-8004
+## How TAPReputationRegistry Works with ERC-8004
 
-The relationship between ReputationRegistry and ERC-8004 mirrors how AgentRegistry relates to per-chain IdentityRegistries:
+The relationship between TAPReputationRegistry and ERC-8004 mirrors how TAPRegistry relates to per-chain IdentityRegistries:
 
-- **ERC-8004 per-chain**: Each chain's ReputationRegistryUpgradeable accumulates local feedback from users interacting with agents on that chain. This is the raw data source.
+- **ERC-8004 per-chain**: Each chain's TAPReputationRegistryUpgradeable accumulates local feedback from users interacting with agents on that chain. This is the raw data source.
 - **Off-chain reporters**: Authorized services read per-chain reputation data (via events, view functions, or indexers) and format it into `ReputationSubmission` structs.
-- **ReputationRegistry on Push Chain**: Receives submissions, validates against AgentRegistry bindings, normalizes, and aggregates.
+- **TAPReputationRegistry on Push Chain**: Receives submissions, validates against TAPRegistry bindings, normalizes, and aggregates.
 
 The dependency chain is:
 
 ```
 ERC-8004 (per-chain)
     → reporters read local reputation data
-        → submit to ReputationRegistry (Push Chain)
-            → validates against AgentRegistry bindings
+        → submit to TAPReputationRegistry (Push Chain)
+            → validates against TAPRegistry bindings
                 → computes aggregated score
 ```
 
-ReputationRegistry never reads directly from per-chain contracts. It trusts authorized reporters to submit accurate snapshots. The trust model is:
+TAPReputationRegistry never reads directly from per-chain contracts. It trusts authorized reporters to submit accurate snapshots. The trust model is:
 
 - **Reporters are trusted**: The `REPORTER_ROLE` is granted to vetted off-chain services. They are responsible for reading per-chain data accurately.
-- **Bindings are verified**: ReputationRegistry validates that the agent actually has a linked identity on the submitted chain by querying AgentRegistry. This prevents reporters from submitting phantom reputation data for chains where the agent doesn't exist.
+- **Bindings are verified**: TAPReputationRegistry validates that the agent actually has a linked identity on the submitted chain by querying TAPRegistry. This prevents reporters from submitting phantom reputation data for chains where the agent doesn't exist.
 - **Staleness is enforced on-chain**: The `sourceBlockNumber` check ensures that old data cannot overwrite new data, regardless of reporter behavior.
 - **Slashing is independent**: `SLASHER_ROLE` is separate from `REPORTER_ROLE`. Slashing doesn't require a binding and persists through unbinds.
 
@@ -341,11 +339,11 @@ ReputationRegistry never reads directly from per-chain contracts. It trusts auth
 
 ## Real-World Example: Multi-Chain DeFi Agent
 
-Consider "YieldBot", an AI agent that optimizes yield farming across Ethereum, Base, and Arbitrum. It has been registered on AgentRegistry and bound to all three chains.
+Consider "YieldBot", an AI agent that optimizes yield farming across Ethereum, Base, and Arbitrum. It has been registered on TAPRegistry and bound to all three chains.
 
 ### Step 1: Earning Reputation Per-Chain
 
-Users interact with YieldBot on each chain. After each interaction, they leave feedback via the per-chain ERC-8004 ReputationRegistryUpgradeable:
+Users interact with YieldBot on each chain. After each interaction, they leave feedback via the per-chain ERC-8004 TAPReputationRegistryUpgradeable:
 
 - **Ethereum**: 500 feedbacks, average rating 92/100 (92 * 1e18, 18 decimals)
 - **Base**: 300 feedbacks, average rating 88/100
@@ -353,7 +351,7 @@ Users interact with YieldBot on each chain. After each interaction, they leave f
 
 ### Step 2: Reporter Submits Snapshots
 
-An authorized reporter reads these per-chain ratings and submits three snapshots to ReputationRegistry on Push Chain:
+An authorized reporter reads these per-chain ratings and submits three snapshots to TAPReputationRegistry on Push Chain:
 
 ```solidity
 // Ethereum snapshot
@@ -361,7 +359,7 @@ repRegistry.submitReputation(ReputationSubmission({
     agentId: yieldBotAgentId,
     chainNamespace: "eip155",
     chainId: "1",
-    registryAddress: 0xEthReputationRegistry...,
+    registryAddress: 0xEthTAPReputationRegistry...,
     boundAgentId: 17,
     feedbackCount: 500,
     summaryValue: 92 * 1e18,
@@ -383,8 +381,8 @@ repRegistry.batchSubmitReputation(subs);
 ```
 
 The contract validates each submission:
-- Checks YieldBot is registered in AgentRegistry
-- Checks YieldBot has a binding to each chain (queries `AgentRegistry.getBindings()`)
+- Checks YieldBot is registered in TAPRegistry
+- Checks YieldBot has a binding to each chain (queries `TAPRegistry.getBindings()`)
 - Checks no stale block numbers
 - Stores per-chain reputation data
 - Reaggregates once (all three submissions are for the same agent)
@@ -427,7 +425,7 @@ require(fresh, "Reputation data too old");
 For more detail:
 
 ```solidity
-IReputationRegistry.AggregatedReputation memory agg =
+ITAPReputationRegistry.AggregatedReputation memory agg =
     repRegistry.getAggregatedReputation(yieldBotAgentId);
 
 // agg.totalFeedbackCount = 1000
@@ -441,7 +439,7 @@ IReputationRegistry.AggregatedReputation memory agg =
 Or per-chain breakdown:
 
 ```solidity
-IReputationRegistry.ChainReputation memory ethRep =
+ITAPReputationRegistry.ChainReputation memory ethRep =
     repRegistry.getChainReputation(yieldBotAgentId, "eip155", "1");
 
 // ethRep.feedbackCount = 500
@@ -488,7 +486,7 @@ repRegistry.submitReputation(ReputationSubmission({
     agentId: yieldBotAgentId,
     chainNamespace: "eip155",
     chainId: "1",
-    registryAddress: 0xEthReputationRegistry...,
+    registryAddress: 0xEthTAPReputationRegistry...,
     boundAgentId: 17,
     feedbackCount: 750,          // more feedback now
     summaryValue: 93 * 1e18,    // slightly improved
@@ -501,7 +499,7 @@ repRegistry.submitReputation(ReputationSubmission({
 
 ### Step 7: Unbind and Reaggregation
 
-If YieldBot stops operating on Arbitrum and the operator unbinds Arbitrum from AgentRegistry, anyone can call:
+If YieldBot stops operating on Arbitrum and the operator unbinds Arbitrum from TAPRegistry, anyone can call:
 
 ```solidity
 repRegistry.reaggregate(yieldBotAgentId);
@@ -513,23 +511,23 @@ This detects that the Arbitrum binding no longer exists, removes Arbitrum reputa
 
 ## Storage Architecture
 
-ReputationRegistry uses ERC-7201 namespaced storage at:
+TAPReputationRegistry uses ERC-7201 namespaced storage at:
 
 ```
 STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.reputation.storage")) - 1))
                 & ~bytes32(uint256(0xff))
 ```
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `aggregated` | `mapping(uint256 => AggregatedReputation)` | Per-agent aggregated reputation |
-| `chainReputations` | `mapping(uint256 => mapping(bytes32 => ChainReputation))` | Per-agent, per-chain reputation snapshots |
-| `chainKeys` | `mapping(uint256 => bytes32[])` | Per-agent array of chain keys (for iteration) |
-| `chainKeyIndex` | `mapping(uint256 => mapping(bytes32 => uint256))` | Index into chainKeys array (for O(1) removal) |
-| `chainKeyExists` | `mapping(uint256 => mapping(bytes32 => bool))` | Existence flag |
-| `slashRecords` | `mapping(uint256 => SlashRecord[])` | Per-agent slash history |
-| `totalSlashSeverity` | `mapping(uint256 => uint256)` | Cumulative slash severity in bps |
-| `agentRegistry` | `address` | Address of the AgentRegistry proxy |
+| Field                | Type                                                      | Purpose                                       |
+| -------------------- | --------------------------------------------------------- | --------------------------------------------- |
+| `aggregated`         | `mapping(uint256 => AggregatedReputation)`                | Per-agent aggregated reputation               |
+| `chainReputations`   | `mapping(uint256 => mapping(bytes32 => ChainReputation))` | Per-agent, per-chain reputation snapshots     |
+| `chainKeys`          | `mapping(uint256 => bytes32[])`                           | Per-agent array of chain keys (for iteration) |
+| `chainKeyIndex`      | `mapping(uint256 => mapping(bytes32 => uint256))`         | Index into chainKeys array (for O(1) removal) |
+| `chainKeyExists`     | `mapping(uint256 => mapping(bytes32 => bool))`            | Existence flag                                |
+| `slashRecords`       | `mapping(uint256 => SlashRecord[])`                       | Per-agent slash history                       |
+| `totalSlashSeverity` | `mapping(uint256 => uint256)`                             | Cumulative slash severity in bps              |
+| `TAPRegistry`        | `address`                                                 | Address of the TAPRegistry proxy              |
 
 ---
 
@@ -537,49 +535,49 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.reputation.storage"))
 
 ### Submission
 
-| Function | Access | Description |
-|----------|--------|-------------|
-| `submitReputation(submission)` | REPORTER_ROLE | Submit a single per-chain reputation snapshot. |
+| Function                               | Access        | Description                                                    |
+| -------------------------------------- | ------------- | -------------------------------------------------------------- |
+| `submitReputation(submission)`         | REPORTER_ROLE | Submit a single per-chain reputation snapshot.                 |
 | `batchSubmitReputation(submissions[])` | REPORTER_ROLE | Submit up to 50 snapshots. Reaggregates once per unique agent. |
 
 ### Slashing
 
-| Function | Access | Description |
-|----------|--------|-------------|
+| Function                                                    | Access       | Description                             |
+| ----------------------------------------------------------- | ------------ | --------------------------------------- |
 | `slash(agentId, ns, id, reason, evidenceHash, severityBps)` | SLASHER_ROLE | Record a slashing event (1-10,000 bps). |
 
 ### Aggregation
 
-| Function | Access | Description |
-|----------|--------|-------------|
+| Function               | Access | Description                                          |
+| ---------------------- | ------ | ---------------------------------------------------- |
 | `reaggregate(agentId)` | Anyone | Force recompute. Removes data for unlinked bindings. |
 
 ### Reads
 
-| Function | Description |
-|----------|-------------|
-| `getAggregatedReputation(agentId)` | Full aggregated struct (score, counts, averages). |
-| `getChainReputation(agentId, ns, id)` | Per-chain snapshot for a specific chain. |
-| `getAllChainReputations(agentId)` | All per-chain snapshots for an agent. |
-| `getReputationScore(agentId)` | Normalized score (0-10,000 bps). |
-| `getSlashRecords(agentId)` | All slash records for an agent. |
-| `isFresh(agentId, maxAge)` | Whether last aggregation is within `maxAge` seconds. |
-| `lastUpdated(agentId)` | Timestamp of last aggregation. |
-| `getAgentRegistry()` | Current AgentRegistry address. |
+| Function                              | Description                                          |
+| ------------------------------------- | ---------------------------------------------------- |
+| `getAggregatedReputation(agentId)`    | Full aggregated struct (score, counts, averages).    |
+| `getChainReputation(agentId, ns, id)` | Per-chain snapshot for a specific chain.             |
+| `getAllChainReputations(agentId)`     | All per-chain snapshots for an agent.                |
+| `getReputationScore(agentId)`         | Normalized score (0-10,000 bps).                     |
+| `getSlashRecords(agentId)`            | All slash records for an agent.                      |
+| `isFresh(agentId, maxAge)`            | Whether last aggregation is within `maxAge` seconds. |
+| `lastUpdated(agentId)`                | Timestamp of last aggregation.                       |
+| `getTAPRegistry()`                    | Current TAPRegistry address.                         |
 
 ### Admin
 
-| Function | Access | Description |
-|----------|--------|-------------|
-| `setAgentRegistry(newAddr)` | DEFAULT_ADMIN_ROLE | Update the AgentRegistry reference. |
-| `pause()` | PAUSER_ROLE | Pause submissions and slashing. |
-| `unpause()` | PAUSER_ROLE | Resume operations. |
+| Function                  | Access             | Description                       |
+| ------------------------- | ------------------ | --------------------------------- |
+| `setTAPRegistry(newAddr)` | DEFAULT_ADMIN_ROLE | Update the TAPRegistry reference. |
+| `pause()`                 | PAUSER_ROLE        | Pause submissions and slashing.   |
+| `unpause()`               | PAUSER_ROLE        | Resume operations.                |
 
 ### Constants
 
-| Constant | Value | Description |
-|----------|-------|-------------|
-| `MAX_BATCH_SIZE` | 50 | Maximum submissions per batch call |
-| `MAX_SLASH_RECORDS` | 256 | Maximum slash records per agent |
-| `MAX_DECIMALS` | 18 | Maximum allowed `valueDecimals` |
-| `MAX_BPS` | 10,000 | Maximum score / severity |
+| Constant            | Value  | Description                        |
+| ------------------- | ------ | ---------------------------------- |
+| `MAX_BATCH_SIZE`    | 50     | Maximum submissions per batch call |
+| `MAX_SLASH_RECORDS` | 256    | Maximum slash records per agent    |
+| `MAX_DECIMALS`      | 18     | Maximum allowed `valueDecimals`    |
+| `MAX_BPS`           | 10,000 | Maximum score / severity           |

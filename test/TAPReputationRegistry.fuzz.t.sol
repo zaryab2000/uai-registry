@@ -2,19 +2,19 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
-import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
-import {ReputationRegistry} from "src/ReputationRegistry.sol";
-import {IReputationRegistry} from "src/interfaces/IReputationRegistry.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
+import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
+import {TAPReputationRegistry} from "src/TAPReputationRegistry.sol";
+import {ITAPReputationRegistry} from "src/interfaces/ITAPReputationRegistry.sol";
 import {MockUEAFactory} from "./mocks/MockUEAFactory.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
 import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-contract ReputationRegistryFuzzTest is Test {
-    AgentRegistry public agentRegistry;
-    ReputationRegistry public repRegistry;
+contract TAPReputationRegistryFuzzTest is Test {
+    TAPRegistry public tapRegistry;
+    TAPReputationRegistry public repRegistry;
     MockUEAFactory public factory;
 
     address public admin = makeAddr("admin");
@@ -43,19 +43,19 @@ contract ReputationRegistryFuzzTest is Test {
             })
         );
 
-        AgentRegistry agentImpl = new AgentRegistry(factory);
+        TAPRegistry agentImpl = new TAPRegistry(factory);
         TransparentUpgradeableProxy agentProxy = new TransparentUpgradeableProxy(
-            address(agentImpl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, pauser))
+            address(agentImpl), admin, abi.encodeCall(TAPRegistry.initialize, (admin, pauser))
         );
-        agentRegistry = AgentRegistry(address(agentProxy));
+        tapRegistry = TAPRegistry(address(agentProxy));
 
-        ReputationRegistry repImpl = new ReputationRegistry();
+        TAPReputationRegistry repImpl = new TAPReputationRegistry();
         TransparentUpgradeableProxy repProxy = new TransparentUpgradeableProxy(
             address(repImpl),
             admin,
-            abi.encodeCall(ReputationRegistry.initialize, (admin, pauser, address(agentRegistry)))
+            abi.encodeCall(TAPReputationRegistry.initialize, (admin, pauser, address(tapRegistry)))
         );
-        repRegistry = ReputationRegistry(address(repProxy));
+        repRegistry = TAPReputationRegistry(address(repProxy));
 
         vm.startPrank(admin);
         repRegistry.grantRole(repRegistry.REPORTER_ROLE(), reporter);
@@ -63,14 +63,14 @@ contract ReputationRegistryFuzzTest is Test {
         vm.stopPrank();
 
         vm.prank(ueaUser);
-        agentId = agentRegistry.register("ipfs://QmTest", keccak256("card"));
+        agentId = tapRegistry.register("ipfs://QmTest", keccak256("card"));
 
         _linkBinding("eip155", "1", REGISTRY_ETH, 42, 1);
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
         (, string memory name, string memory version, uint256 cId, address vc,,) =
-            agentRegistry.eip712Domain();
+            tapRegistry.eip712Domain();
         return keccak256(
             abi.encode(
                 keccak256(
@@ -116,13 +116,13 @@ contract ReputationRegistryFuzzTest is Test {
         bytes memory sig = _signDigest(digest);
 
         vm.prank(ueaUser);
-        agentRegistry.bind(
-            IAgentRegistry.BindRequest({
+        tapRegistry.bind(
+            ITAPRegistry.BindRequest({
                 chainNamespace: chainNs,
                 chainId: chainId,
                 registryAddress: registryAddr,
                 boundAgentId: boundAgentId,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: sig,
                 nonce: nonce,
                 deadline: deadline
@@ -141,7 +141,7 @@ contract ReputationRegistryFuzzTest is Test {
 
         vm.prank(reporter);
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -181,7 +181,7 @@ contract ReputationRegistryFuzzTest is Test {
 
         vm.startPrank(reporter);
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -196,7 +196,7 @@ contract ReputationRegistryFuzzTest is Test {
             })
         );
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "8453",
@@ -212,7 +212,7 @@ contract ReputationRegistryFuzzTest is Test {
         );
         vm.stopPrank();
 
-        IReputationRegistry.AggregatedReputation memory agg =
+        ITAPReputationRegistry.AggregatedReputation memory agg =
             repRegistry.getAggregatedReputation(agentId);
         assertEq(agg.totalFeedbackCount, uint64(uint256(count1) + uint256(count2)));
     }
@@ -226,7 +226,7 @@ contract ReputationRegistryFuzzTest is Test {
 
         vm.prank(reporter);
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -244,7 +244,7 @@ contract ReputationRegistryFuzzTest is Test {
         vm.prank(reporter);
         vm.expectRevert();
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -267,7 +267,7 @@ contract ReputationRegistryFuzzTest is Test {
 
         vm.prank(reporter);
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -298,7 +298,7 @@ contract ReputationRegistryFuzzTest is Test {
 
         vm.prank(reporter);
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",
@@ -314,11 +314,11 @@ contract ReputationRegistryFuzzTest is Test {
         );
 
         repRegistry.reaggregate(agentId);
-        IReputationRegistry.AggregatedReputation memory agg1 =
+        ITAPReputationRegistry.AggregatedReputation memory agg1 =
             repRegistry.getAggregatedReputation(agentId);
 
         repRegistry.reaggregate(agentId);
-        IReputationRegistry.AggregatedReputation memory agg2 =
+        ITAPReputationRegistry.AggregatedReputation memory agg2 =
             repRegistry.getAggregatedReputation(agentId);
 
         assertEq(agg1.reputationScore, agg2.reputationScore);
@@ -334,7 +334,7 @@ contract ReputationRegistryFuzzTest is Test {
 
         vm.prank(reporter);
         repRegistry.submitReputation(
-            IReputationRegistry.ReputationSubmission({
+            ITAPReputationRegistry.ReputationSubmission({
                 agentId: agentId,
                 chainNamespace: "eip155",
                 chainId: "1",

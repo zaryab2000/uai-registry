@@ -2,13 +2,13 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
 
 contract VerifyDeployment is Script {
     function run(
         address proxyAddress
     ) external view {
-        AgentRegistry registry = AgentRegistry(proxyAddress);
+        TAPRegistry registry = TAPRegistry(proxyAddress);
 
         bool registered = registry.isRegistered(0);
         console.log("isRegistered(0):", registered);

@@ -1,8 +1,6 @@
-# AgentRegistry
+# TAPRegistry
 
-Universal Agent Identity Registry on Push Chain.
-
-AgentRegistry is the canonical identity contract for AI agents operating across multiple blockchains. It lives on Push Chain and serves as the single source of truth for "who is this agent?" regardless of which chain the agent originally registered on.
+TAPRegistry is the canonical identity contract for AI agents operating across multiple blockchains. It lives on Push Chain and serves as the single source of truth for "who is this agent?" regardless of which chain the agent originally registered on.
 
 Every agent gets one identity. That identity can be linked to per-chain registrations on Ethereum, Base, Arbitrum, or any EVM-compatible chain running an ERC-8004 IdentityRegistry. The result is a unified, cross-chain identity graph for AI agents, anchored to a soulbound (non-transferable) record on Push Chain.
 
@@ -21,9 +19,9 @@ Without a canonical registry, "cross-chain agent identity" is a manual, trust-th
 
 ---
 
-## How AgentRegistry Solves It
+## How TAPRegistry Solves It
 
-AgentRegistry introduces a two-layer identity model:
+TAPRegistry introduces a two-layer identity model:
 
 1. **Canonical identity on Push Chain** -- the agent registers once on Push Chain via its Universal Executor Account (UEA). This creates a soulbound, non-transferable identity record.
 
@@ -109,7 +107,7 @@ Agent identities are non-transferable. The contract implements the ERC-721 trans
 
 ### Storage Architecture
 
-AgentRegistry uses ERC-7201 namespaced storage for upgrade safety. All state lives in a single storage struct at a deterministic slot:
+TAPRegistry uses ERC-7201 namespaced storage for upgrade safety. All state lives in a single storage struct at a deterministic slot:
 
 ```
 STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.registry.storage")) - 1))
@@ -118,14 +116,14 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.registry.storage")) -
 
 The storage struct contains:
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `records` | `mapping(uint256 => AgentRecord)` | Agent ID to registration record |
-| `bindings` | `mapping(uint256 => BindEntry[])` | Agent ID to array of bindings |
-| `bindToCanonical` | `mapping(bytes32 => uint256)` | Dedup key to canonical agent ID (global uniqueness) |
-| `bindIndex` | `mapping(uint256 => mapping(bytes32 => uint256))` | Agent ID + chain key to array index (for O(1) lookup) |
-| `bindExists` | `mapping(uint256 => mapping(bytes32 => bool))` | Agent ID + chain key to existence flag |
-| `usedNonces` | `mapping(uint256 => mapping(uint256 => bool))` | Agent ID + nonce to used flag (replay protection) |
+| Field             | Type                                              | Purpose                                               |
+| ----------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| `records`         | `mapping(uint256 => AgentRecord)`                 | Agent ID to registration record                       |
+| `bindings`        | `mapping(uint256 => BindEntry[])`                 | Agent ID to array of bindings                         |
+| `bindToCanonical` | `mapping(bytes32 => uint256)`                     | Dedup key to canonical agent ID (global uniqueness)   |
+| `bindIndex`       | `mapping(uint256 => mapping(bytes32 => uint256))` | Agent ID + chain key to array index (for O(1) lookup) |
+| `bindExists`      | `mapping(uint256 => mapping(bytes32 => bool))`    | Agent ID + chain key to existence flag                |
+| `usedNonces`      | `mapping(uint256 => mapping(uint256 => bool))`    | Agent ID + nonce to used flag (replay protection)     |
 
 ### Access Control and Pausability
 
@@ -137,15 +135,15 @@ The storage struct contains:
 
 ## Novel Features (Beyond ERC-8004)
 
-ERC-8004 defines per-chain identity registries with transferable ERC-721 tokens and no cross-chain awareness. AgentRegistry introduces several features that do not exist in the base specification.
+ERC-8004 defines per-chain identity registries with transferable ERC-721 tokens and no cross-chain awareness. TAPRegistry introduces several features that do not exist in the base specification.
 
 ### Soulbound Identity Tokens
 
-ERC-8004 issues transferable ERC-721 tokens for agent identity. AgentRegistry overrides the entire ERC-721 transfer surface (`transferFrom`, `safeTransferFrom`, `approve`, `setApprovalForAll`) to revert unconditionally with `IdentityNotTransferable()`. Agent identity is permanently bound to the UEA that created it — it cannot be sold, delegated, or transferred to another entity. This guarantees that the `agentId ↔ UEA` relationship is immutable after registration.
+ERC-8004 issues transferable ERC-721 tokens for agent identity. TAPRegistry overrides the entire ERC-721 transfer surface (`transferFrom`, `safeTransferFrom`, `approve`, `setApprovalForAll`) to revert unconditionally with `IdentityNotTransferable()`. Agent identity is permanently bound to the UEA that created it — it cannot be sold, delegated, or transferred to another entity. This guarantees that the `agentId ↔ UEA` relationship is immutable after registration.
 
 ### Binding with EIP-712 Cryptographic Proof
 
-ERC-8004 has no concept of cross-chain identity binding. AgentRegistry introduces `bind`, where the UEA owner signs an EIP-712 typed data message proving they control the same identity on another chain's ERC-8004 registry. The signature binds the canonical UEA, target chain namespace, chain ID, registry address, bound agent ID, nonce, and deadline into a single verifiable proof. Both EOA signatures (ECDSA recovery) and smart wallet signatures (ERC-1271 `isValidSignature`) are supported, so agents controlled by multisigs or account-abstraction wallets can create bindings without workarounds.
+ERC-8004 has no concept of cross-chain identity binding. TAPRegistry introduces `bind`, where the UEA owner signs an EIP-712 typed data message proving they control the same identity on another chain's ERC-8004 registry. The signature binds the canonical UEA, target chain namespace, chain ID, registry address, bound agent ID, nonce, and deadline into a single verifiable proof. Both EOA signatures (ECDSA recovery) and smart wallet signatures (ERC-1271 `isValidSignature`) are supported, so agents controlled by multisigs or account-abstraction wallets can create bindings without workarounds.
 
 ### Global Binding Deduplication
 
@@ -153,16 +151,16 @@ A bound identity tuple `(chainNamespace, chainId, registryAddress, boundAgentId)
 
 ---
 
-## How AgentRegistry Works with ERC-8004
+## How TAPRegistry Works with ERC-8004
 
-ERC-8004 defines the per-chain standard for agent identity and reputation. Each chain deploys its own `IdentityRegistry` (and optionally `ReputationRegistryUpgradeable`). Agents register on each chain independently through these per-chain contracts.
+ERC-8004 defines the per-chain standard for agent identity and reputation. Each chain deploys its own `IdentityRegistry` (and optionally `TAPReputationRegistryUpgradeable`). Agents register on each chain independently through these per-chain contracts.
 
-AgentRegistry sits on top of ERC-8004 as the **cross-chain unification layer**:
+TAPRegistry sits on top of ERC-8004 as the **cross-chain unification layer**:
 
 ```
                          Push Chain
                     +-----------------+
-                    | AgentRegistry   |
+                    | TAPRegistry   |
                     |  (canonical ID) |
                     +--------+--------+
                              |
@@ -178,7 +176,7 @@ AgentRegistry sits on top of ERC-8004 as the **cross-chain unification layer**:
 
 The relationship is:
 - ERC-8004 handles per-chain registration, metadata, and local operations.
-- AgentRegistry maps per-chain registrations to a single canonical identity.
+- TAPRegistry maps per-chain registrations to a single canonical identity.
 - Bindings are the bridge -- each binding says "agent #42 on Ethereum's IdentityRegistry at `0xABC...` is the same entity as canonical agent `0x123...` on Push Chain."
 
 ### Reverse Lookups
@@ -200,12 +198,12 @@ The operator's Ethereum address is `0xAlice...`. They use the Push Chain UEA fac
 
 The UEA is deployed at address `0xUEA_Alice...` on Push Chain.
 
-### Step 2: Register on AgentRegistry
+### Step 2: Register on TAPRegistry
 
 From the UEA (`0xUEA_Alice...`), the operator calls:
 
 ```solidity
-agentRegistry.register(
+TAPRegistry.register(
     "ipfs://QmAlphaBotCard",        // agent card metadata URI
     keccak256(agentCardJSON)         // hash of the agent card content
 );
@@ -236,7 +234,7 @@ Bind(
 They sign this with the private key of `0xAlice...` (the owner key), then call:
 
 ```solidity
-agentRegistry.bind(BindRequest({
+TAPRegistry.bind(BindRequest({
     chainNamespace: "eip155",
     chainId: "1",
     registryAddress: 0xEthIdentityRegistry...,
@@ -255,7 +253,7 @@ The contract verifies the signature, confirms the binding isn't already claimed,
 Same process for Base:
 
 ```solidity
-agentRegistry.bind(BindRequest({
+TAPRegistry.bind(BindRequest({
     chainNamespace: "eip155",
     chainId: "8453",
     registryAddress: 0xBaseIdentityRegistry...,
@@ -272,7 +270,7 @@ agentRegistry.bind(BindRequest({
 Now, a user on Base interacting with agent #42 wants to know if this agent has a canonical identity. They (or a dApp, or another contract) query Push Chain:
 
 ```solidity
-(address canonical, bool verified) = agentRegistry.canonicalUEAFromBinding(
+(address canonical, bool verified) = TAPRegistry.canonicalUEAFromBinding(
     "eip155",
     "8453",
     0xBaseIdentityRegistry...,
@@ -285,8 +283,8 @@ Now, a user on Base interacting with agent #42 wants to know if this agent has a
 The user can then query the full agent record:
 
 ```solidity
-uint256 agentId = agentRegistry.agentIdOfUEA(canonical);
-IAgentRegistry.AgentRecord memory record = agentRegistry.getAgentRecord(agentId);
+uint256 agentId = TAPRegistry.agentIdOfUEA(canonical);
+ITAPRegistry.AgentRecord memory record = TAPRegistry.getAgentRecord(agentId);
 // record.agentURI = "ipfs://QmAlphaBotCard"
 // record.originChainNamespace = "eip155"
 // record.originChainId = "1"
@@ -296,30 +294,30 @@ IAgentRegistry.AgentRecord memory record = agentRegistry.getAgentRecord(agentId)
 And see all bindings:
 
 ```solidity
-IAgentRegistry.BindEntry[] memory bindings = agentRegistry.getBindings(agentId);
+ITAPRegistry.BindEntry[] memory bindings = TAPRegistry.getBindings(agentId);
 // bindings[0]: Ethereum mainnet, agentId 17
 // bindings[1]: Base, agentId 42
 ```
 
-The user now has cryptographic proof that agent #42 on Base and agent #17 on Ethereum are the same entity, with a verifiable metadata URI and the ability to check the agent's cross-chain reputation (via ReputationRegistry).
+The user now has cryptographic proof that agent #42 on Base and agent #17 on Ethereum are the same entity, with a verifiable metadata URI and the ability to check the agent's cross-chain reputation (via TAPReputationRegistry).
 
 ### Step 7: Updating Metadata
 
 If AlphaBot upgrades its model or capabilities, the operator updates the agent card:
 
 ```solidity
-agentRegistry.setAgentURI("ipfs://QmAlphaBotCardV2");
-agentRegistry.setAgentCardHash(keccak256(newAgentCardJSON));
+TAPRegistry.setAgentURI("ipfs://QmAlphaBotCardV2");
+TAPRegistry.setAgentCardHash(keccak256(newAgentCardJSON));
 ```
 
-This update is immediately visible to all chains that resolve through AgentRegistry. No need to update per-chain registrations for identity metadata.
+This update is immediately visible to all chains that resolve through TAPRegistry. No need to update per-chain registrations for identity metadata.
 
 ### Step 8: Unbinding
 
 If AlphaBot stops operating on Base, the operator removes the binding:
 
 ```solidity
-agentRegistry.unbind(
+TAPRegistry.unbind(
     "eip155",
     "8453",
     0xBaseIdentityRegistry...
@@ -334,36 +332,36 @@ The binding is removed, the dedup key is freed (another agent could now claim th
 
 ### Registration
 
-| Function | Access | Description |
-|----------|--------|-------------|
+| Function                            | Access    | Description                                 |
+| ----------------------------------- | --------- | ------------------------------------------- |
 | `register(agentURI, agentCardHash)` | UEA owner | Register or re-register. Returns `agentId`. |
-| `setAgentURI(newAgentURI)` | UEA owner | Update metadata URI only. |
-| `setAgentCardHash(newHash)` | UEA owner | Update agent card hash only. |
+| `setAgentURI(newAgentURI)`          | UEA owner | Update metadata URI only.                   |
+| `setAgentCardHash(newHash)`         | UEA owner | Update agent card hash only.                |
 
 ### Binding
 
-| Function | Access | Description |
-|----------|--------|-------------|
-| `bind(req)` | UEA owner | Bind a per-chain ERC-8004 identity with EIP-712 proof. |
-| `unbind(ns, id, addr)` | UEA owner | Remove a binding. |
+| Function               | Access    | Description                                            |
+| ---------------------- | --------- | ------------------------------------------------------ |
+| `bind(req)`            | UEA owner | Bind a per-chain ERC-8004 identity with EIP-712 proof. |
+| `unbind(ns, id, addr)` | UEA owner | Remove a binding.                                      |
 
 ### Reads
 
-| Function | Description |
-|----------|-------------|
-| `ownerOf(agentId)` | UEA address that owns the agent (ERC-721 compatible). |
-| `tokenURI(agentId)` | Metadata URI (ERC-721 compatible). |
-| `agentURI(agentId)` | Metadata URI (ERC-8004 alias). |
-| `canonicalUEA(agentId)` | UEA address for an agent ID. |
-| `agentIdOfUEA(uea)` | Agent ID for a UEA address (0 if unregistered). |
-| `getBindings(agentId)` | All bind entries for an agent. |
-| `canonicalUEAFromBinding(ns, id, addr, boundId)` | Resolve binding to canonical UEA. |
-| `isRegistered(agentId)` | Check registration status. |
-| `getAgentRecord(agentId)` | Full on-chain record. |
+| Function                                         | Description                                           |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| `ownerOf(agentId)`                               | UEA address that owns the agent (ERC-721 compatible). |
+| `tokenURI(agentId)`                              | Metadata URI (ERC-721 compatible).                    |
+| `agentURI(agentId)`                              | Metadata URI (ERC-8004 alias).                        |
+| `canonicalUEA(agentId)`                          | UEA address for an agent ID.                          |
+| `agentIdOfUEA(uea)`                              | Agent ID for a UEA address (0 if unregistered).       |
+| `getBindings(agentId)`                           | All bind entries for an agent.                        |
+| `canonicalUEAFromBinding(ns, id, addr, boundId)` | Resolve binding to canonical UEA.                     |
+| `isRegistered(agentId)`                          | Check registration status.                            |
+| `getAgentRecord(agentId)`                        | Full on-chain record.                                 |
 
 ### Admin
 
-| Function | Access | Description |
-|----------|--------|-------------|
-| `pause()` | PAUSER_ROLE | Pause all state-changing operations. |
-| `unpause()` | PAUSER_ROLE | Resume operations. |
+| Function    | Access      | Description                          |
+| ----------- | ----------- | ------------------------------------ |
+| `pause()`   | PAUSER_ROLE | Pause all state-changing operations. |
+| `unpause()` | PAUSER_ROLE | Resume operations.                   |

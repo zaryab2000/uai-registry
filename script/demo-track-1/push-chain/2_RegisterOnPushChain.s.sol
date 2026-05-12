@@ -2,11 +2,11 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
-import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
+import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
 
 /// @title 2_RegisterOnPushChain
-/// @notice Registers the canonical agent identity on Push Chain's AgentRegistry.
+/// @notice Registers the canonical agent identity on Push Chain's TAPRegistry.
 ///         Must be called by the Agent Builder wallet.
 ///
 /// Usage:
@@ -17,18 +17,18 @@ import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
 /// Env vars required:
 ///   AGENT_URI        - IPFS URI for agent card
 ///   AGENT_CARD_HASH  - keccak256 of agent card JSON content
-///   AGENT_REGISTRY   - AgentRegistry proxy address on Push Chain
+///   AGENT_REGISTRY   - TAPRegistry proxy address on Push Chain
 contract RegisterOnPushChain is Script {
     function run() external {
         string memory agentURI = vm.envString("AGENT_URI");
         bytes32 cardHash = vm.envBytes32("AGENT_CARD_HASH");
         address registryAddr = vm.envAddress("AGENT_REGISTRY");
 
-        AgentRegistry registry = AgentRegistry(registryAddr);
+        TAPRegistry registry = TAPRegistry(registryAddr);
 
         _header("STEP 2: Register Canonical Identity on Push Chain");
         _log("Chain ID", vm.toString(block.chainid));
-        _log("AgentRegistry", vm.toString(registryAddr));
+        _log("TAPRegistry", vm.toString(registryAddr));
         _log("Caller (UEA)", vm.toString(msg.sender));
         _log("Agent URI", agentURI);
         _log("Card Hash", vm.toString(cardHash));
@@ -38,7 +38,7 @@ contract RegisterOnPushChain is Script {
         uint256 agentId = registry.register(agentURI, cardHash);
         vm.stopBroadcast();
 
-        IAgentRegistry.AgentRecord memory record = registry.getAgentRecord(agentId);
+        ITAPRegistry.AgentRecord memory record = registry.getAgentRecord(agentId);
 
         _header("REGISTRATION RESULT");
         _log("Agent ID", vm.toString(agentId));

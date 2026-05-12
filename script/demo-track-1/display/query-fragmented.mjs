@@ -91,25 +91,19 @@ console.log();
 console.log(chalk.bold.red(TOP));
 console.log(
   chalk.bold.red(
-    boxLine(chalk.bold.white("BEFORE TAP — FRAGMENTED IDENTITY"))
-  )
-);
-console.log(chalk.bold.red(MID));
-console.log(
-  chalk.bold.red(
-    boxLine(
-      `${chalk.dim("Same wallet, same agent, same metadata")}`
-    )
-  )
-);
-console.log(
-  chalk.bold.red(
-    boxLine(
-      `${chalk.dim("But 3 chains, 3 different IDs, ZERO link")}`
-    )
+    boxLine(chalk.bold.white("ERC8004 Agent Full Profile"))
   )
 );
 console.log(chalk.bold.red(BOT));
+console.log();
+console.log(chalk.red(sTop("FRAGMENTED IDENTITY")));
+console.log(
+  sLine(chalk.dim("Same wallet, same agent, same metadata"))
+);
+console.log(
+  sLine(chalk.dim("But 3 chains, 3 different IDs, ZERO link"))
+);
+console.log(sBot());
 
 // ── Query each chain ────────────────────────────────────
 

@@ -1,4 +1,4 @@
-# Deployment Plan — AgentRegistry & ReputationRegistry
+# Deployment Plan — TAPRegistry & TAPReputationRegistry
 
 First deployment on Push Chain Donut Testnet.
 
@@ -6,32 +6,32 @@ First deployment on Push Chain Donut Testnet.
 
 ## Network Configuration
 
-| Parameter | Value |
-|-----------|-------|
-| Network | Push Chain Donut Testnet |
-| Chain ID | `42101` |
-| RPC URL | `https://evm.donut.rpc.push.org/` |
-| Block Explorer | `https://donut.push.network` |
-| Currency Symbol | `PC` |
-| Faucet | `https://faucet.push.org` |
-| EVM Target | `shanghai` |
+| Parameter       | Value                             |
+| --------------- | --------------------------------- |
+| Network         | Push Chain Donut Testnet          |
+| Chain ID        | `42101`                           |
+| RPC URL         | `https://evm.donut.rpc.push.org/` |
+| Block Explorer  | `https://donut.push.network`      |
+| Currency Symbol | `PC`                              |
+| Faucet          | `https://faucet.push.org`         |
+| EVM Target      | `shanghai`                        |
 
 ## Push Chain System Contracts (Predeploys)
 
-| Contract | Address | Role |
-|----------|---------|------|
-| UEA Factory | `0x00000000000000000000000000000000000000eA` | Deploys/manages Universal Executor Accounts. AgentRegistry calls `getOriginForUEA()`. |
-| Universal Gateway PC | `0x00000000000000000000000000000000000000C1` | Push-side gateway for cross-chain messages. |
-| Universal Core | `0x00000000000000000000000000000000000000C0` | Mints PRC-20 tokens, manages cross-chain native token pricing. |
+| Contract             | Address                                      | Role                                                                                |
+| -------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| UEA Factory          | `0x00000000000000000000000000000000000000eA` | Deploys/manages Universal Executor Accounts. TAPRegistry calls `getOriginForUEA()`. |
+| Universal Gateway PC | `0x00000000000000000000000000000000000000C1` | Push-side gateway for cross-chain messages.                                         |
+| Universal Core       | `0x00000000000000000000000000000000000000C0` | Mints PRC-20 tokens, manages cross-chain native token pricing.                      |
 
 ### External Chain Gateways (Source-Chain Deployments)
 
-| Chain | Gateway Address |
-|-------|-----------------|
+| Chain            | Gateway Address                              |
+| ---------------- | -------------------------------------------- |
 | Ethereum Sepolia | `0x05bD7a3D18324c1F7e216f7fBF2b15985aE5281A` |
 | Arbitrum Sepolia | `0x2cd870e0166Ba458dEC615168Fd659AacD795f34` |
-| Base Sepolia | `0xFD4fef1F43aFEc8b5bcdEEc47f35a1431479aC16` |
-| BNB Testnet | `0x44aFFC61983F4348DdddB886349eb992C061EaC0` |
+| Base Sepolia     | `0xFD4fef1F43aFEc8b5bcdEEc47f35a1431479aC16` |
+| BNB Testnet      | `0x44aFFC61983F4348DdddB886349eb992C061EaC0` |
 
 ---
 
@@ -63,8 +63,8 @@ Create `.env` in project root (already gitignored):
 PC_RPC=https://evm.donut.rpc.push.org/
 PC_KEY=0x...
 
-# Post-deployment: set after AgentRegistry deploys
-AGENT_REGISTRY_PROXY=0x...
+# Post-deployment: set after TAPRegistry deploys
+TAP_REGISTRY_PROXY=0x...
 
 # Reputation roles
 INITIAL_REPORTER=0x...
@@ -96,9 +96,9 @@ cast balance <DEPLOYER_ADDRESS> --rpc-url $PC_RPC
 ## Deployment Order
 
 ```
-Step 1: AgentRegistry (depends on UEA Factory predeploy)
+Step 1: TAPRegistry (depends on UEA Factory predeploy)
    ↓
-Step 2: ReputationRegistry (depends on AgentRegistry proxy address)
+Step 2: TAPReputationRegistry (depends on TAPRegistry proxy address)
    ↓
 Step 3: Grant roles + verify
    ↓
@@ -113,13 +113,13 @@ Foundry's `forge script --broadcast` does not support unknown chain IDs (42101 i
 
 ---
 
-## Step 1 — Deploy AgentRegistry
+## Step 1 — Deploy TAPRegistry
 
 ```bash
 source .env
 
 # Deploy implementation
-BYTECODE=$(forge inspect src/AgentRegistry.sol:AgentRegistry bytecode)
+BYTECODE=$(forge inspect src/TAPRegistry.sol:TAPRegistry bytecode)
 ARGS=$(cast abi-encode "constructor(address)" \
     0x00000000000000000000000000000000000000eA | sed 's/^0x//')
 cast send --rpc-url $PC_RPC --private-key $PC_KEY \
@@ -137,11 +137,11 @@ cast send --rpc-url $PC_RPC --private-key $PC_KEY \
 
 ---
 
-## Step 2 — Deploy ReputationRegistry
+## Step 2 — Deploy TAPReputationRegistry
 
 ```bash
 # Deploy implementation
-BYTECODE=$(forge inspect src/ReputationRegistry.sol:ReputationRegistry bytecode)
+BYTECODE=$(forge inspect src/TAPReputationRegistry.sol:TAPReputationRegistry bytecode)
 cast send --rpc-url $PC_RPC --private-key $PC_KEY --create "$BYTECODE" --json
 
 # Deploy proxy
@@ -166,12 +166,12 @@ cast send <REP_PROXY> "grantRole(bytes32,address)" $SLASHER_ROLE $DEPLOYER \
 ## Step 3 — Verify Deployments
 
 ```bash
-# AgentRegistry
-cast call $AGENT_REGISTRY_PROXY "ueaFactory()(address)" --rpc-url $PC_RPC
-cast call $AGENT_REGISTRY_PROXY "supportsInterface(bytes4)(bool)" 0x80ac58cd --rpc-url $PC_RPC
+# TAPRegistry
+cast call $TAP_REGISTRY_PROXY "ueaFactory()(address)" --rpc-url $PC_RPC
+cast call $TAP_REGISTRY_PROXY "supportsInterface(bytes4)(bool)" 0x80ac58cd --rpc-url $PC_RPC
 
-# ReputationRegistry
-cast call $REPUTATION_REGISTRY_PROXY "getAgentRegistry()(address)" --rpc-url $PC_RPC
+# TAPReputationRegistry
+cast call $TAP_REPUTATION_REGISTRY_PROXY "getTAPRegistry()(address)" --rpc-url $PC_RPC
 ```
 
 ---
@@ -179,17 +179,17 @@ cast call $REPUTATION_REGISTRY_PROXY "getAgentRegistry()(address)" --rpc-url $PC
 ## Step 4 — Verify on Blockscout
 
 ```bash
-# AgentRegistry implementation
+# TAPRegistry implementation
 forge verify-contract --chain 42101 --verifier blockscout \
     --verifier-url https://donut.push.network/api \
-    <IMPL_ADDRESS> src/AgentRegistry.sol:AgentRegistry \
+    <IMPL_ADDRESS> src/TAPRegistry.sol:TAPRegistry \
     --constructor-args $(cast abi-encode "constructor(address)" \
         0x00000000000000000000000000000000000000eA)
 
-# ReputationRegistry implementation
+# TAPReputationRegistry implementation
 forge verify-contract --chain 42101 --verifier blockscout \
     --verifier-url https://donut.push.network/api \
-    <IMPL_ADDRESS> src/ReputationRegistry.sol:ReputationRegistry
+    <IMPL_ADDRESS> src/TAPReputationRegistry.sol:TAPReputationRegistry
 
 # Proxies (usually auto-verified by Blockscout)
 forge verify-contract --chain 42101 --verifier blockscout \
@@ -213,31 +213,31 @@ cast balance <DEPLOYER> --rpc-url $PC_RPC  # sufficient $PC
 
 ## Post-Deployment Roles
 
-### AgentRegistry
+### TAPRegistry
 
-| Role | Holder |
-|------|--------|
-| `DEFAULT_ADMIN_ROLE` | Deployer |
-| `PAUSER_ROLE` | Deployer |
-| Proxy Admin | ProxyAdmin contract (owned by deployer) |
+| Role                 | Holder                                  |
+| -------------------- | --------------------------------------- |
+| `DEFAULT_ADMIN_ROLE` | Deployer                                |
+| `PAUSER_ROLE`        | Deployer                                |
+| Proxy Admin          | ProxyAdmin contract (owned by deployer) |
 
-### ReputationRegistry
+### TAPReputationRegistry
 
-| Role | Holder |
-|------|--------|
-| `DEFAULT_ADMIN_ROLE` | Deployer |
-| `PAUSER_ROLE` | Deployer |
-| `REPORTER_ROLE` | Deployer (reassign to reporter service) |
-| `SLASHER_ROLE` | Deployer (reassign to slasher service) |
-| Proxy Admin | ProxyAdmin contract (owned by deployer) |
+| Role                 | Holder                                  |
+| -------------------- | --------------------------------------- |
+| `DEFAULT_ADMIN_ROLE` | Deployer                                |
+| `PAUSER_ROLE`        | Deployer                                |
+| `REPORTER_ROLE`      | Deployer (reassign to reporter service) |
+| `SLASHER_ROLE`       | Deployer (reassign to slasher service)  |
+| Proxy Admin          | ProxyAdmin contract (owned by deployer) |
 
 ---
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| Push Chain does not support Cancun opcodes | `foundry.toml` pins `evm_version = "shanghai"`. Verified during initial deployment. |
-| `forge script --broadcast` fails on chain 42101 | Use `cast send --create` directly. |
-| UEA Factory not at `0x...eA` | Check with `cast code` before deploying. |
-| Wrong AgentRegistry passed to ReputationRegistry | Correctable via `setAgentRegistry()` (admin-only). |
+| Risk                                              | Mitigation                                                                          |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Push Chain does not support Cancun opcodes        | `foundry.toml` pins `evm_version = "shanghai"`. Verified during initial deployment. |
+| `forge script --broadcast` fails on chain 42101   | Use `cast send --create` directly.                                                  |
+| UEA Factory not at `0x...eA`                      | Check with `cast code` before deploying.                                            |
+| Wrong TAPRegistry passed to TAPReputationRegistry | Correctable via `setTAPRegistry()` (admin-only).                                    |

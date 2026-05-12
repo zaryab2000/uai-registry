@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {ReputationRegistry} from "src/ReputationRegistry.sol";
+import {TAPReputationRegistry} from "src/TAPReputationRegistry.sol";
 import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
@@ -10,23 +10,23 @@ import {
 contract DeployReputation is Script {
     function run() external {
         address deployer = msg.sender;
-        address agentRegistryProxy = vm.envAddress("AGENT_REGISTRY_PROXY");
+        address TAPRegistryProxy = vm.envAddress("TAP_REGISTRY_PROXY");
         address reporter = vm.envAddress("INITIAL_REPORTER");
         address slasher = vm.envAddress("INITIAL_SLASHER");
 
         vm.startBroadcast();
 
-        ReputationRegistry impl = new ReputationRegistry();
+        TAPReputationRegistry impl = new TAPReputationRegistry();
         console.log("Implementation:", address(impl));
 
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(impl),
             deployer,
-            abi.encodeCall(ReputationRegistry.initialize, (deployer, deployer, agentRegistryProxy))
+            abi.encodeCall(TAPReputationRegistry.initialize, (deployer, deployer, TAPRegistryProxy))
         );
         console.log("Proxy:", address(proxy));
 
-        ReputationRegistry registry = ReputationRegistry(address(proxy));
+        TAPReputationRegistry registry = TAPReputationRegistry(address(proxy));
 
         registry.grantRole(registry.REPORTER_ROLE(), reporter);
         console.log("Reporter granted:", reporter);

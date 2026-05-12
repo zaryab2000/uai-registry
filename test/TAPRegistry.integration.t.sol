@@ -2,16 +2,16 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {AgentRegistry} from "src/AgentRegistry.sol";
-import {IAgentRegistry} from "src/interfaces/IAgentRegistry.sol";
+import {TAPRegistry} from "src/TAPRegistry.sol";
+import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
 import {IUEAFactory} from "src/interfaces/IUEAFactory.sol";
 import {UniversalAccountId} from "src/libraries/Types.sol";
 import {
     TransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-contract AgentRegistryIntegrationTest is Test {
-    AgentRegistry public registry;
+contract TAPRegistryIntegrationTest is Test {
+    TAPRegistry public registry;
 
     address constant UEA_FACTORY = 0x00000000000000000000000000000000000000eA;
     uint256 constant PUSH_CHAIN_ID = 42_101;
@@ -34,11 +34,11 @@ contract AgentRegistryIntegrationTest is Test {
     function setUp() public onlyPushChain {
         (admin, adminKey) = makeAddrAndKey("integrationAdmin");
 
-        AgentRegistry impl = new AgentRegistry(IUEAFactory(UEA_FACTORY));
+        TAPRegistry impl = new TAPRegistry(IUEAFactory(UEA_FACTORY));
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(impl), admin, abi.encodeCall(AgentRegistry.initialize, (admin, admin))
+            address(impl), admin, abi.encodeCall(TAPRegistry.initialize, (admin, admin))
         );
-        registry = AgentRegistry(address(proxy));
+        registry = TAPRegistry(address(proxy));
     }
 
     function _getDomainSeparator() internal view returns (bytes32) {
@@ -71,7 +71,7 @@ contract AgentRegistryIntegrationTest is Test {
 
         assertEq(agentId, uint256(uint160(caller)));
 
-        IAgentRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        ITAPRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
         assertTrue(rec.registered);
         assertTrue(bytes(rec.originChainNamespace).length > 0);
     }
@@ -102,12 +102,12 @@ contract AgentRegistryIntegrationTest is Test {
 
         vm.prank(caller);
         registry.bind(
-            IAgentRegistry.BindRequest({
+            ITAPRegistry.BindRequest({
                 chainNamespace: "eip155",
                 chainId: "1",
                 registryAddress: ethRegistry,
                 boundAgentId: 42,
-                proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                 proofData: abi.encodePacked(r, s, v),
                 nonce: 1,
                 deadline: block.timestamp + 1 hours
@@ -151,12 +151,12 @@ contract AgentRegistryIntegrationTest is Test {
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
 
             registry.bind(
-                IAgentRegistry.BindRequest({
+                ITAPRegistry.BindRequest({
                     chainNamespace: "eip155",
                     chainId: chains[i],
                     registryAddress: reg,
                     boundAgentId: boundIds[i],
-                    proofType: IAgentRegistry.BindProofType.OWNER_KEY_SIGNED,
+                    proofType: ITAPRegistry.BindProofType.OWNER_KEY_SIGNED,
                     proofData: abi.encodePacked(r, s, v),
                     nonce: i + 1,
                     deadline: block.timestamp + 1 hours
@@ -164,7 +164,7 @@ contract AgentRegistryIntegrationTest is Test {
             );
         }
 
-        IAgentRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(caller)));
+        ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(uint256(uint160(caller)));
         assertEq(bindings.length, 3);
 
         registry.unbind("eip155", "8453", reg);

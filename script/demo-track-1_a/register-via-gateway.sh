@@ -7,7 +7,7 @@ set -euo pipefail
 #
 # The Agent Builder stays on Ethereum Sepolia and calls
 # UniversalGateway.sendUniversalTx() to register the agent
-# on Push Chain's AgentRegistry without ever transacting
+# on Push Chain's TAPRegistry without ever transacting
 # on Push Chain directly.
 #
 # Usage:
@@ -16,7 +16,7 @@ set -euo pipefail
 #
 # Env vars required:
 #   AGENT_BUILDER_KEY    - Private key for the Agent Builder wallet
-#   AGENT_REGISTRY       - AgentRegistry proxy on Push Chain
+#   AGENT_REGISTRY       - TAPRegistry proxy on Push Chain
 #
 # Env vars optional (loaded from .env):
 #   SEPOLIA_RPC, PC_RPC, GATEWAY_SEPOLIA

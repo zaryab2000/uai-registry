@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-/// @param agentId The agent ID not found in AgentRegistry.
+/// @param agentId The agent ID not found in TAPRegistry.
 error AgentNotRegisteredForReputation(uint256 agentId);
 
 /// @param agentId The agent ID.
@@ -41,8 +41,8 @@ error EmptyBatch();
 /// @param valueDecimals The invalid decimal value.
 error InvalidDecimals(uint8 valueDecimals);
 
-/// @dev Thrown when agentRegistry address is zero.
-error InvalidAgentRegistryAddress();
+/// @dev Thrown when TAPRegistry address is zero.
+error InvalidTAPRegistryAddress();
 
 /// @dev Thrown when admin or pauser address is zero in initialize().
 error InvalidInitializationAddress();

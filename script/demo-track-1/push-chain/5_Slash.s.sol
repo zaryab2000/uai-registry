@@ -2,8 +2,8 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {ReputationRegistry} from "src/ReputationRegistry.sol";
-import {IReputationRegistry} from "src/interfaces/IReputationRegistry.sol";
+import {TAPReputationRegistry} from "src/TAPReputationRegistry.sol";
+import {ITAPReputationRegistry} from "src/interfaces/ITAPReputationRegistry.sol";
 
 /// @title 5_Slash
 /// @notice Slashes an agent for misconduct. Called by the Deployer
@@ -17,7 +17,7 @@ import {IReputationRegistry} from "src/interfaces/IReputationRegistry.sol";
 ///     --rpc-url $PC_RPC --broadcast -vvvv
 ///
 /// Env vars required:
-///   REPUTATION_REGISTRY - ReputationRegistry proxy address
+///   REPUTATION_REGISTRY - TAPReputationRegistry proxy address
 ///   AGENT_ID            - Canonical agent ID
 ///   SLASH_CHAIN_ID      - Chain ID where offense occurred
 ///   SEVERITY_BPS        - Severity in basis points (1-10000)
@@ -30,7 +30,7 @@ contract Slash is Script {
         uint256 severityBps = vm.envUint("SEVERITY_BPS");
         string memory reason = vm.envString("SLASH_REASON");
 
-        ReputationRegistry repRegistry = ReputationRegistry(repRegistryAddr);
+        TAPReputationRegistry repRegistry = TAPReputationRegistry(repRegistryAddr);
 
         uint256 scoreBefore = repRegistry.getReputationScore(agentId);
 
@@ -53,7 +53,7 @@ contract Slash is Script {
 
         uint256 scoreAfter = repRegistry.getReputationScore(agentId);
 
-        IReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
+        ITAPReputationRegistry.SlashRecord[] memory records = repRegistry.getSlashRecords(agentId);
 
         _header("SLASH RESULT");
         _log("Status", "SUCCESS");

@@ -15,15 +15,15 @@ import {
     IdentityNotTransferable,
     MaxBindingsExceeded,
     AgentIdCollision
-} from "../libraries/Errors.sol";
+} from "../libraries/RegistryErrors.sol";
 
-/// @title IAgentRegistry
+/// @title ITAPRegistry
 /// @notice ERC-8004-compatible Universal Agent Identity Registry on Push Chain.
 ///         Uses UEA addresses as canonical agent identifiers.
 ///         agentId = uint256(uint160(ueaAddress)) % 10_000_000 — 7-digit, deterministic.
 ///         Collision guard reverts if two addresses share the same truncated ID.
 ///         Non-transferable (soulbound).
-interface IAgentRegistry {
+interface ITAPRegistry {
     // ──────────────────────────────────────────────
     //  Types
     // ──────────────────────────────────────────────
@@ -189,7 +189,7 @@ interface IAgentRegistry {
     ) external view returns (string memory);
 
     // ──────────────────────────────────────────────
-    //  Reads — AgentRegistry-specific
+    //  Reads — TAPRegistry-specific
     // ──────────────────────────────────────────────
 
     /// @notice Return the canonical UEA address for an agent ID.

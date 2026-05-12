@@ -18,7 +18,7 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import {IUEAFactory} from "./interfaces/IUEAFactory.sol";
 import {UniversalAccountId} from "./libraries/Types.sol";
-import {IAgentRegistry} from "./interfaces/IAgentRegistry.sol";
+import {ITAPRegistry} from "./interfaces/ITAPRegistry.sol";
 import {
     AgentNotRegistered,
     AgentCardHashRequired,
@@ -33,12 +33,12 @@ import {
     IdentityNotTransferable,
     MaxBindingsExceeded,
     AgentIdCollision
-} from "./libraries/Errors.sol";
+} from "./libraries/RegistryErrors.sol";
 
-/// @title AgentRegistry
+/// @title TAPRegistry
 /// @notice ERC-8004-compatible Universal Agent Identity Registry on Push Chain.
-contract AgentRegistry is
-    IAgentRegistry,
+contract TAPRegistry is
+    ITAPRegistry,
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable,
@@ -62,7 +62,7 @@ contract AgentRegistry is
     // ──────────────────────────────────────────────
 
     /// @custom:storage-location erc7201:tap.registry.storage
-    struct AgentRegistryStorage {
+    struct TAPRegistryStorage {
         mapping(uint256 => AgentRecord) records;
         mapping(uint256 => BindEntry[]) bindings;
         mapping(bytes32 => uint256) bindToCanonical; // stores agentId + 1; 0 = not bound
@@ -77,7 +77,7 @@ contract AgentRegistry is
     bytes32 private constant STORAGE_SLOT =
         0x058d5531a4d48d6b2756a26de7bf5dc8cee5997c802aa85f245da9412ca74a00;
 
-    function _getStorage() private pure returns (AgentRegistryStorage storage s) {
+    function _getStorage() private pure returns (TAPRegistryStorage storage s) {
         bytes32 slot = STORAGE_SLOT;
         assembly {
             s.slot := slot
@@ -110,14 +110,14 @@ contract AgentRegistry is
     //  Registration
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function register(
         string calldata _agentURI,
         bytes32 agentCardHash
     ) external whenNotPaused returns (uint256 agentId) {
         if (agentCardHash == bytes32(0)) revert AgentCardHashRequired();
 
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         uint256 raw = s.ownerToAgentId[msg.sender];
 
         if (raw != 0) {
@@ -160,11 +160,11 @@ contract AgentRegistry is
         }
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function setAgentURI(
         string calldata newAgentURI
     ) external whenNotPaused {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         uint256 raw = s.ownerToAgentId[msg.sender];
         if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
         uint256 agentId = raw - 1;
@@ -172,12 +172,12 @@ contract AgentRegistry is
         emit AgentURIUpdated(agentId, newAgentURI);
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function setAgentCardHash(
         bytes32 newHash
     ) external whenNotPaused {
         if (newHash == bytes32(0)) revert AgentCardHashRequired();
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         uint256 raw = s.ownerToAgentId[msg.sender];
         if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
         uint256 agentId = raw - 1;
@@ -189,11 +189,11 @@ contract AgentRegistry is
     //  Binding
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function bind(
         BindRequest calldata req
     ) external whenNotPaused {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         uint256 raw = s.ownerToAgentId[msg.sender];
         if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
         uint256 agentId = raw - 1;
@@ -260,13 +260,13 @@ contract AgentRegistry is
         );
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function unbind(
         string calldata chainNamespace,
         string calldata chainId,
         address registryAddress
     ) external whenNotPaused {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         uint256 raw = s.ownerToAgentId[msg.sender];
         if (raw == 0) revert AgentNotRegistered(uint256(uint160(msg.sender)) % 10_000_000);
         uint256 agentId = raw - 1;
@@ -308,31 +308,31 @@ contract AgentRegistry is
     //  Reads — ERC-8004-shaped
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function ownerOf(
         uint256 agentId
     ) external view returns (address) {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         if (!s.records[agentId].registered) revert AgentNotRegistered(agentId);
         return _ownerKeyToAddress(s.records[agentId].ownerKey);
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function tokenURI(
         uint256 agentId
     ) external view returns (string memory) {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         if (!s.records[agentId].registered) {
             revert AgentNotRegistered(agentId);
         }
         return s.records[agentId].agentURI;
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function agentURI(
         uint256 agentId
     ) external view returns (string memory) {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         if (!s.records[agentId].registered) {
             revert AgentNotRegistered(agentId);
         }
@@ -340,19 +340,19 @@ contract AgentRegistry is
     }
 
     // ──────────────────────────────────────────────
-    //  Reads — AgentRegistry-specific
+    //  Reads — TAPRegistry-specific
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function canonicalUEA(
         uint256 agentId
     ) external view returns (address) {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         if (!s.records[agentId].registered) revert AgentNotRegistered(agentId);
         return _ownerKeyToAddress(s.records[agentId].ownerKey);
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function agentIdOfUEA(
         address uea
     ) external view returns (uint256) {
@@ -361,21 +361,21 @@ contract AgentRegistry is
         return raw - 1;
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function getBindings(
         uint256 agentId
     ) external view returns (BindEntry[] memory) {
         return _getStorage().bindings[agentId];
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function canonicalUEAFromBinding(
         string calldata chainNamespace,
         string calldata chainId,
         address registryAddress,
         uint256 boundAgentId
     ) external view returns (address canonical, bool verified) {
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         bytes32 dedupKey =
             keccak256(abi.encode(chainNamespace, chainId, registryAddress, boundAgentId));
         uint256 stored = s.bindToCanonical[dedupKey];
@@ -387,14 +387,14 @@ contract AgentRegistry is
         return (_ownerKeyToAddress(s.records[agentId].ownerKey), s.bindings[agentId][idx].verified);
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function isRegistered(
         uint256 agentId
     ) external view returns (bool) {
         return _getStorage().records[agentId].registered;
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function getAgentRecord(
         uint256 agentId
     ) external view returns (AgentRecord memory) {
@@ -405,7 +405,7 @@ contract AgentRegistry is
     //  ERC-721 transfer surface — all revert
     // ──────────────────────────────────────────────
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function transferFrom(
         address,
         address,
@@ -414,7 +414,7 @@ contract AgentRegistry is
         revert IdentityNotTransferable();
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function safeTransferFrom(
         address,
         address,
@@ -423,7 +423,7 @@ contract AgentRegistry is
         revert IdentityNotTransferable();
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function safeTransferFrom(
         address,
         address,
@@ -433,7 +433,7 @@ contract AgentRegistry is
         revert IdentityNotTransferable();
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function approve(
         address,
         uint256
@@ -441,7 +441,7 @@ contract AgentRegistry is
         revert IdentityNotTransferable();
     }
 
-    /// @inheritdoc IAgentRegistry
+    /// @inheritdoc ITAPRegistry
     function setApprovalForAll(
         address,
         bool
@@ -494,7 +494,7 @@ contract AgentRegistry is
         );
         bytes32 digest = _hashTypedDataV4(structHash);
 
-        AgentRegistryStorage storage s = _getStorage();
+        TAPRegistryStorage storage s = _getStorage();
         uint256 raw = s.ownerToAgentId[canonicalUEAAddr];
         if (raw == 0) revert AgentNotRegistered(uint256(uint160(canonicalUEAAddr)) % 10_000_000);
         uint256 agentId = raw - 1;
