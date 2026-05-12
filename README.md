@@ -1,6 +1,6 @@
 # TAP — Trustless Agents Plus
 
-An ERC-8004-compatible Identity Registry deployed on Push Chain that uses the agent's Universal Executor Account (UEA) address as the canonical, chain-agnostic agent identifier. Per-chain ERC-8004 registries become "bound registries" that link their local `agentId` to the canonical UEA via cryptographic proof of key ownership. The contract is non-transferable (soulbound), uses `agentId = uint256(uint160(ueaAddress))` for deterministic IDs, and supports verified binding via EIP-712 signatures from per-chain NFT owners.
+An ERC-8004-compatible Identity Registry deployed on Push Chain that uses the agent's Universal Executor Account (UEA) address as the canonical, chain-agnostic agent identifier. Per-chain ERC-8004 registries become "bound registries" that link their local `agentId` to the canonical UEA via cryptographic proof of key ownership. The contract is non-transferable (soulbound), uses `agentId = uint256(uint160(ueaAddress)) % 10_000_000` for deterministic 7-digit IDs (with collision guard), and supports verified binding via EIP-712 signatures from per-chain NFT owners.
 
 **Status:** Implemented — 70 tests passing (32 unit, 29 binding, 6 fuzz x 1000 runs each, 3 fork-only integration scaffolds).
 

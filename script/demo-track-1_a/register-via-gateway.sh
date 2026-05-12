@@ -81,19 +81,28 @@ UEA_DEPLOYED=$(echo "${UEA_RESULT}" | grep -o 'true\|false')
 echo "  UEA Address:     ${UEA_ADDRESS}"
 echo "  UEA Deployed:    ${UEA_DEPLOYED}"
 
-CANONICAL_AGENT_ID=$(cast --to-uint256 "${UEA_ADDRESS}")
-echo "  Canonical ID:    ${CANONICAL_AGENT_ID}"
+TRUNCATED_ID=$(python3 -c "print(int('${UEA_ADDRESS}', 16) % 10_000_000)")
+if [[ "${TRUNCATED_ID}" == "0" ]]; then TRUNCATED_ID=10000000; fi
+echo "  Expected ID:     ${TRUNCATED_ID}"
 echo ""
 
 # ── 2. Check if already registered ─────────────────
 echo "  [2/5] Checking if already registered..."
 
-IS_REGISTERED=$(cast call "${AGENT_REGISTRY}" \
-    "isRegistered(uint256)(bool)" "${CANONICAL_AGENT_ID}" \
-    --rpc-url "${PC_RPC}" 2>/dev/null || echo "false")
+EXISTING_ID=$(cast call "${AGENT_REGISTRY}" \
+    "agentIdOfUEA(address)(uint256)" "${UEA_ADDRESS}" \
+    --rpc-url "${PC_RPC}" 2>/dev/null || echo "0")
 
-if [[ "${IS_REGISTERED}" == "true" ]]; then
-    echo "  ALREADY REGISTERED — skipping gateway tx"
+if [[ "${EXISTING_ID}" != "0" ]]; then
+    echo "  ALREADY REGISTERED — agent ID ${EXISTING_ID}"
+    CANONICAL_AGENT_ID="${EXISTING_ID}"
+
+    if grep -q "^CANONICAL_AGENT_ID=" "${ENV_FILE}" 2>/dev/null; then
+        sed -i '' "s/^CANONICAL_AGENT_ID=.*/CANONICAL_AGENT_ID=${CANONICAL_AGENT_ID}/" "${ENV_FILE}"
+    else
+        echo "CANONICAL_AGENT_ID=${CANONICAL_AGENT_ID}" >> "${ENV_FILE}"
+    fi
+    echo "  Saved CANONICAL_AGENT_ID=${CANONICAL_AGENT_ID} -> ${ENV_FILE}"
     echo ""
     exit 0
 fi
@@ -144,16 +153,18 @@ echo ""
 MAX_ATTEMPTS=40
 SLEEP_INTERVAL=5
 ATTEMPT=0
+CANONICAL_AGENT_ID=""
 
 while [[ ${ATTEMPT} -lt ${MAX_ATTEMPTS} ]]; do
     ATTEMPT=$((ATTEMPT + 1))
 
-    IS_REGISTERED=$(cast call "${AGENT_REGISTRY}" \
-        "isRegistered(uint256)(bool)" "${CANONICAL_AGENT_ID}" \
-        --rpc-url "${PC_RPC}" 2>/dev/null || echo "false")
+    CANONICAL_AGENT_ID=$(cast call "${AGENT_REGISTRY}" \
+        "agentIdOfUEA(address)(uint256)" "${UEA_ADDRESS}" \
+        --rpc-url "${PC_RPC}" 2>/dev/null || echo "0")
 
-    if [[ "${IS_REGISTERED}" == "true" ]]; then
+    if [[ "${CANONICAL_AGENT_ID}" != "0" ]]; then
         echo "  REGISTERED after ${ATTEMPT} polls (~$((ATTEMPT * SLEEP_INTERVAL))s)"
+        echo "  Agent ID: ${CANONICAL_AGENT_ID}"
         break
     fi
 
@@ -163,19 +174,20 @@ done
 
 echo ""
 
-if [[ "${IS_REGISTERED}" != "true" ]]; then
+if [[ -z "${CANONICAL_AGENT_ID}" || "${CANONICAL_AGENT_ID}" == "0" ]]; then
+    CANONICAL_AGENT_ID="${TRUNCATED_ID}"
     echo "  WARNING: Registration not confirmed after $((MAX_ATTEMPTS * SLEEP_INTERVAL))s"
     echo "  The gateway tx succeeded on Sepolia (${TX_HASH})"
     echo "  but Push Chain hasn't processed it yet."
     echo ""
     echo "  You can manually check later:"
-    echo "    cast call ${AGENT_REGISTRY} 'isRegistered(uint256)(bool)' ${CANONICAL_AGENT_ID} --rpc-url ${PC_RPC}"
+    echo "    cast call ${AGENT_REGISTRY} 'agentIdOfUEA(address)(uint256)' ${UEA_ADDRESS} --rpc-url ${PC_RPC}"
     echo ""
-    echo "  Saving UEA address to env file anyway..."
+    echo "  Saving expected agent ID (${TRUNCATED_ID}) to env file..."
 fi
 
 # ── Verify registration details ─────────────────────
-if [[ "${IS_REGISTERED}" == "true" ]]; then
+if [[ "${CANONICAL_AGENT_ID}" != "0" && -n "${CANONICAL_AGENT_ID}" ]]; then
     echo ""
     echo "=========================================="
     echo "  REGISTRATION VERIFIED"

@@ -75,7 +75,7 @@ bind_chain() {
     # Use previously saved nonce + 1 if this chain was bound before
     local prev_nonce
     prev_nonce=$(grep "^${nonce_env_key}=" "${ENV_FILE}" 2>/dev/null \
-        | tail -1 | cut -d= -f2)
+        | tail -1 | cut -d= -f2 || true)
     local nonce
     if [[ -n "${prev_nonce}" ]]; then
         nonce=$((prev_nonce + 1))

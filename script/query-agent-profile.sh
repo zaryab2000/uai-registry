@@ -2,15 +2,15 @@
 set -euo pipefail
 
 # ==========================================
-#  TAP Demo — Query Fragmented State (Pretty)
+#  TAP — Query Fragmented Agent State (Pretty)
 # ==========================================
 #
 # Usage:
-#   ./script/demo-track-1/query-fragmented.sh <agent_number>
-#   ./script/demo-track-1/query-fragmented.sh 1
+#   ./script/query-agent-profile.sh <agent_number>
+#   ./script/query-agent-profile.sh 1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 AGENT_NUM="${1:-1}"
 AGENT_NAME="TAP_AGENT_${AGENT_NUM}"
@@ -30,4 +30,4 @@ fi
 source "${ENV_FILE}"
 
 export BOUND_AGENT_ID_ETH BOUND_AGENT_ID_BASE BOUND_AGENT_ID_BSC
-node "${SCRIPT_DIR}/display/query-fragmented.mjs"
+node "${SCRIPT_DIR}/demo-track-1/display/query-fragmented.mjs"

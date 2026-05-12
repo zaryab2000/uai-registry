@@ -2,15 +2,15 @@
 set -euo pipefail
 
 # ==========================================
-#  TAP Demo — Query Full Profile (Pretty)
+#  TAP — Query Full Agent Profile (Pretty)
 # ==========================================
 #
 # Usage:
-#   ./script/demo-track-1/query-profile.sh <agent_number>
-#   ./script/demo-track-1/query-profile.sh 1
+#   ./script/query-tap-agent-profile.sh <agent_number>
+#   ./script/query-tap-agent-profile.sh 1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 AGENT_NUM="${1:-1}"
 AGENT_NAME="TAP_AGENT_${AGENT_NUM}"
@@ -30,4 +30,4 @@ fi
 source "${ENV_FILE}"
 
 export PC_RPC AGENT_NAME CANONICAL_AGENT_ID
-AGENT_ID="${CANONICAL_AGENT_ID}" node "${SCRIPT_DIR}/display/query-profile.mjs"
+AGENT_ID="${CANONICAL_AGENT_ID}" node "${SCRIPT_DIR}/demo-track-1/display/query-profile.mjs"

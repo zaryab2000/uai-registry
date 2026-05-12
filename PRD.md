@@ -2,7 +2,9 @@
 
 ## 1. Project Summary
 
-An ERC-8004-compatible Identity Registry deployed on Push Chain that uses the agent's Universal Executor Account (UEA) address as the canonical, chain-agnostic agent identifier. Per-chain ERC-8004 registries become "shadow registries" that link their local `agentId` to the canonical UEA via cryptographic proof of key ownership. The contract is non-transferable (soulbound), uses `agentId = uint256(uint160(ueaAddress))` for deterministic IDs, and supports verified shadow linking via EIP-712 signatures from per-chain NFT owners. This PRD covers core registration, shadow linking, and test infrastructure (Milestones M1 + M2 + M5 from the project idea).
+An ERC-8004-compatible Identity Registry deployed on Push Chain that uses the agent's Universal Executor Account (UEA) address as the canonical, chain-agnostic agent identifier. Per-chain ERC-8004 registries become "shadow registries" that link their local `agentId` to the canonical UEA via cryptographic proof of key ownership. The contract is non-transferable (soulbound), uses `agentId = uint256(uint160(ueaAddress)) % 10_000_000` for deterministic 7-digit IDs (with collision guard and zero-reservation), and supports verified shadow linking via EIP-712 signatures from per-chain NFT owners. This PRD covers core registration, shadow linking, and test infrastructure (Milestones M1 + M2 + M5 from the project idea).
+
+> **Note:** This PRD was written for the original full-uint160 agent ID design. The implementation now uses 7-digit truncated IDs (`% 10_000_000`). References to `agentId = uint256(uint160(msg.sender))` throughout this document should be read as `uint256(uint160(msg.sender)) % 10_000_000`. ID 0 is reserved as sentinel; addresses truncating to 0 receive ID 10_000_000. `AgentIdCollision` reverts if two addresses share the same truncated ID.
 
 ## 2. Problem Context
 

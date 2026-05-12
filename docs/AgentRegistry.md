@@ -33,10 +33,11 @@ AgentRegistry introduces a two-layer identity model:
 
 Push Chain's Universal Executor Accounts (UEAs) are factory-deployed accounts that bridge external chain identities to Push Chain. When a user from Ethereum creates a UEA on Push Chain, the UEA factory records their origin chain, chain ID, and owner key (the Ethereum address that controls the UEA).
 
-The `agentId` is deterministic: `agentId = uint256(uint160(ueaAddress))`. This means:
-- The agent ID is the UEA address itself, cast to uint256.
-- No counter. No mapping lookup. No collision risk.
-- Anyone who knows the UEA address can compute the agent ID, and vice versa.
+The `agentId` is deterministic: `agentId = uint256(uint160(ueaAddress)) % 10_000_000`. This means:
+- The agent ID is a 7-digit number derived from the UEA address.
+- No counter. No external mapping. Collision guard reverts if two addresses share the same truncated ID.
+- ID 0 is reserved as sentinel; addresses truncating to 0 receive ID 10_000_000.
+- Anyone who knows the UEA address can compute the agent ID via `agentIdOfUEA()`.
 
 ### Registration
 
@@ -210,7 +211,7 @@ agentRegistry.register(
 );
 ```
 
-This creates a canonical identity with `agentId = uint256(uint160(0xUEA_Alice...))`. The registration record stores the origin chain info and owner key.
+This creates a canonical identity with a 7-digit `agentId` derived from the UEA address. The registration record stores the origin chain info and owner key.
 
 ### Step 3: Register on Per-Chain ERC-8004 Registries
 
@@ -284,9 +285,8 @@ Now, a user on Base interacting with agent #42 wants to know if this agent has a
 The user can then query the full agent record:
 
 ```solidity
-IAgentRegistry.AgentRecord memory record = agentRegistry.getAgentRecord(
-    uint256(uint160(canonical))
-);
+uint256 agentId = agentRegistry.agentIdOfUEA(canonical);
+IAgentRegistry.AgentRecord memory record = agentRegistry.getAgentRecord(agentId);
 // record.agentURI = "ipfs://QmAlphaBotCard"
 // record.originChainNamespace = "eip155"
 // record.originChainId = "1"

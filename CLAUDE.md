@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TAP (Trustless Agents Plus) is an ERC-8004-compatible Universal Agent Identity Registry on Push Chain. It uses Universal Executor Account (UEA) addresses as canonical, chain-agnostic agent identifiers. Per-chain ERC-8004 registries become "bound registries" linked to the canonical UEA via EIP-712 signatures. Identity tokens are soulbound (non-transferable), with `agentId = uint256(uint160(ueaAddress))`.
+TAP (Trustless Agents Plus) is an ERC-8004-compatible Universal Agent Identity Registry on Push Chain. It uses Universal Executor Account (UEA) addresses as canonical, chain-agnostic agent identifiers. Per-chain ERC-8004 registries become "bound registries" linked to the canonical UEA via EIP-712 signatures. Identity tokens are soulbound (non-transferable), with `agentId = uint256(uint160(ueaAddress)) % 10_000_000` (7-digit, deterministic). ID 0 is reserved as sentinel; addresses that truncate to 0 receive ID 10_000_000. Collision guard reverts if two addresses share the same truncated ID.
 
 The ReputationRegistry is a cross-chain agent reputation aggregator that collects per-chain reputation snapshots from authorized reporters and computes aggregated scores keyed to canonical UEA identities.
 
@@ -52,7 +52,7 @@ Two upgradeable contracts deployed behind `TransparentUpgradeableProxy`:
 
 ### Cross-chain invocation (no source-chain wrappers)
 
-Source chains (Sepolia, Base, BSC) use the existing ERC-8004 IdentityRegistry directly. Agents call Push Chain's `AgentRegistry` / `ReputationRegistry` either directly on Push Chain (Track 1) or via Push Chain's Universal Gateway from the source chain (Track 1.a). See `docs/TRACK1_WORKFLOW.md` and `docs/TRACK1-a_workflow.md`.
+Source chains (Sepolia, Base, BSC) use the existing ERC-8004 IdentityRegistry directly. Agents call Push Chain's `AgentRegistry` / `ReputationRegistry` either directly on Push Chain (Track 1) or via Push Chain's Universal Gateway from the source chain (Track 1.a). See `docs/TRACK1-a_workflow.md`.
 
 ### Key design patterns
 
