@@ -17,8 +17,8 @@ contract UpgradeTAPRegistry is Script {
     address constant UEA_FACTORY = 0x00000000000000000000000000000000000000eA;
 
     function run() external {
-        address proxy = vm.envAddress("AGENT_REGISTRY_PROXY");
-        address proxyAdmin = vm.envAddress("AGENT_REGISTRY_PROXY_ADMIN");
+        address proxy = vm.envAddress("TAP_REGISTRY_PROXY");
+        address proxyAdmin = vm.envAddress("TAP_REGISTRY_PROXY_ADMIN");
 
         TAPRegistry oldImpl = TAPRegistry(proxy);
         console.log("Proxy:", proxy);

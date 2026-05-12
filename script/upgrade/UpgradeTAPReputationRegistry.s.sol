@@ -14,8 +14,8 @@ interface IProxyAdmin {
 
 contract UpgradeTAPReputationRegistry is Script {
     function run() external {
-        address proxy = vm.envAddress("REPUTATION_REGISTRY_PROXY");
-        address proxyAdmin = vm.envAddress("REPUTATION_REGISTRY_PROXY_ADMIN");
+        address proxy = vm.envAddress("TAP_REPUTATION_REGISTRY_PROXY");
+        address proxyAdmin = vm.envAddress("TAP_REPUTATION_REGISTRY_PROXY_ADMIN");
 
         TAPReputationRegistry old = TAPReputationRegistry(proxy);
         console.log("Proxy:", proxy);

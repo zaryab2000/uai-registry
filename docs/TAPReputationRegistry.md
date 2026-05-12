@@ -1,8 +1,6 @@
 # TAPReputationRegistry
 
-Cross-Chain Agent Reputation Aggregator on Push Chain.
-
-TAPReputationRegistry collects per-chain reputation data for AI agents and computes a single, normalized reputation score (0-10,000 basis points) that reflects an agent's performance across every chain it operates on. It works alongside TAPRegistry: where TAPRegistry answers "who is this agent?", TAPReputationRegistry answers "how trustworthy is this agent?"
+TAP's ReputationRegistry collects per-chain reputation data for AI agents and computes a single, normalized reputation score (0-10,000 basis points) that reflects an agent's performance across every chain it operates on. It works alongside TAPRegistry: where TAPRegistry answers "who is this agent?", TAPReputationRegistry answers "how trustworthy is this agent?"
 
 ---
 

@@ -1,7 +1,5 @@
 # TAPRegistry
 
-Universal Agent Identity Registry on Push Chain.
-
 TAPRegistry is the canonical identity contract for AI agents operating across multiple blockchains. It lives on Push Chain and serves as the single source of truth for "who is this agent?" regardless of which chain the agent originally registered on.
 
 Every agent gets one identity. That identity can be linked to per-chain registrations on Ethereum, Base, Arbitrum, or any EVM-compatible chain running an ERC-8004 IdentityRegistry. The result is a unified, cross-chain identity graph for AI agents, anchored to a soulbound (non-transferable) record on Push Chain.

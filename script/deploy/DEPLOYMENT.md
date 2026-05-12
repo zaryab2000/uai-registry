@@ -64,7 +64,7 @@ PC_RPC=https://evm.donut.rpc.push.org/
 PC_KEY=0x...
 
 # Post-deployment: set after TAPRegistry deploys
-AGENT_REGISTRY_PROXY=0x...
+TAP_REGISTRY_PROXY=0x...
 
 # Reputation roles
 INITIAL_REPORTER=0x...
@@ -167,11 +167,11 @@ cast send <REP_PROXY> "grantRole(bytes32,address)" $SLASHER_ROLE $DEPLOYER \
 
 ```bash
 # TAPRegistry
-cast call $AGENT_REGISTRY_PROXY "ueaFactory()(address)" --rpc-url $PC_RPC
-cast call $AGENT_REGISTRY_PROXY "supportsInterface(bytes4)(bool)" 0x80ac58cd --rpc-url $PC_RPC
+cast call $TAP_REGISTRY_PROXY "ueaFactory()(address)" --rpc-url $PC_RPC
+cast call $TAP_REGISTRY_PROXY "supportsInterface(bytes4)(bool)" 0x80ac58cd --rpc-url $PC_RPC
 
 # TAPReputationRegistry
-cast call $REPUTATION_REGISTRY_PROXY "getTAPRegistry()(address)" --rpc-url $PC_RPC
+cast call $TAP_REPUTATION_REGISTRY_PROXY "getTAPRegistry()(address)" --rpc-url $PC_RPC
 ```
 
 ---

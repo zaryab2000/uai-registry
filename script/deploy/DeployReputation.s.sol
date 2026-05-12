@@ -10,7 +10,7 @@ import {
 contract DeployReputation is Script {
     function run() external {
         address deployer = msg.sender;
-        address TAPRegistryProxy = vm.envAddress("AGENT_REGISTRY_PROXY");
+        address TAPRegistryProxy = vm.envAddress("TAP_REGISTRY_PROXY");
         address reporter = vm.envAddress("INITIAL_REPORTER");
         address slasher = vm.envAddress("INITIAL_SLASHER");
 

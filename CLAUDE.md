@@ -36,7 +36,7 @@ forge test --match-path test/TAPRegistry.integration.t.sol --fork-url $PUSH_CHAI
 DEPLOYER_KEY=0x... forge script script/deploy/Deploy.s.sol --rpc-url $PUSH_CHAIN_RPC --broadcast
 
 # TAPReputationRegistry (Push Chain, requires existing TAPRegistry proxy)
-AGENT_REGISTRY_PROXY=0x... INITIAL_REPORTER=0x... INITIAL_SLASHER=0x... \
+TAP_REGISTRY_PROXY=0x... INITIAL_REPORTER=0x... INITIAL_SLASHER=0x... \
   forge script script/deploy/DeployReputation.s.sol --rpc-url $PUSH_CHAIN_RPC --broadcast
 ```
 
