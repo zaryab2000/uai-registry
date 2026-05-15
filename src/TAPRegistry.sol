@@ -70,6 +70,7 @@ contract TAPRegistry is
         mapping(uint256 => mapping(bytes32 => bool)) bindExists;
         mapping(uint256 => mapping(uint256 => bool)) usedNonces;
         mapping(address => uint256) ownerToAgentId; // stores agentId + 1; 0 = not registered
+        mapping(bytes32 => uint256) ownerKeyToAgentId; // keccak256(ownerKey) → agentId + 1; 0 = not registered
     }
 
     // keccak256(abi.encode(uint256(keccak256("tap.registry.storage")) - 1))
@@ -122,42 +123,69 @@ contract TAPRegistry is
 
         if (raw != 0) {
             agentId = raw - 1;
-            AgentRecord storage record = s.records[agentId];
-            record.agentURI = _agentURI;
-            record.agentCardHash = agentCardHash;
-            emit AgentURIUpdated(agentId, _agentURI);
-            emit AgentCardHashUpdated(agentId, agentCardHash);
+            _updateRecord(s, agentId, _agentURI, agentCardHash);
         } else {
-            agentId = uint256(uint160(msg.sender)) % 10_000_000;
-            if (agentId == 0) agentId = 10_000_000;
-            if (s.records[agentId].registered) {
-                revert AgentIdCollision(agentId, _ownerKeyToAddress(s.records[agentId].ownerKey));
-            }
-
-            (UniversalAccountId memory origin, bool isUEA) = ueaFactory.getOriginForUEA(msg.sender);
-
-            AgentRecord storage record = s.records[agentId];
-            record.registered = true;
-            record.agentURI = _agentURI;
-            record.agentCardHash = agentCardHash;
-            record.registeredAt = uint64(block.timestamp);
-            record.originChainNamespace = origin.chainNamespace;
-            record.originChainId = origin.chainId;
-            record.ownerKey = origin.owner;
-            record.nativeToPush = !isUEA;
-
-            s.ownerToAgentId[msg.sender] = agentId + 1;
-
-            emit Registered(
-                agentId,
-                msg.sender,
-                origin.chainNamespace,
-                origin.chainId,
-                origin.owner,
-                _agentURI,
-                agentCardHash
-            );
+            agentId = _registerNewOrAlias(s, _agentURI, agentCardHash);
         }
+    }
+
+    function _updateRecord(
+        TAPRegistryStorage storage s,
+        uint256 agentId,
+        string calldata _agentURI,
+        bytes32 agentCardHash
+    ) private {
+        AgentRecord storage record = s.records[agentId];
+        record.agentURI = _agentURI;
+        record.agentCardHash = agentCardHash;
+        emit AgentURIUpdated(agentId, _agentURI);
+        emit AgentCardHashUpdated(agentId, agentCardHash);
+    }
+
+    function _registerNewOrAlias(
+        TAPRegistryStorage storage s,
+        string calldata _agentURI,
+        bytes32 agentCardHash
+    ) private returns (uint256 agentId) {
+        (UniversalAccountId memory origin, bool isUEA) = ueaFactory.getOriginForUEA(msg.sender);
+        bytes32 ownerHash = keccak256(origin.owner);
+
+        uint256 ownerRaw = s.ownerKeyToAgentId[ownerHash];
+        if (ownerRaw != 0) {
+            agentId = ownerRaw - 1;
+            s.ownerToAgentId[msg.sender] = agentId + 1;
+            _updateRecord(s, agentId, _agentURI, agentCardHash);
+            return agentId;
+        }
+
+        agentId = uint256(uint160(msg.sender)) % 10_000_000;
+        if (agentId == 0) agentId = 10_000_000;
+        if (s.records[agentId].registered) {
+            revert AgentIdCollision(agentId, _ownerKeyToAddress(s.records[agentId].ownerKey));
+        }
+
+        AgentRecord storage record = s.records[agentId];
+        record.registered = true;
+        record.agentURI = _agentURI;
+        record.agentCardHash = agentCardHash;
+        record.registeredAt = uint64(block.timestamp);
+        record.originChainNamespace = origin.chainNamespace;
+        record.originChainId = origin.chainId;
+        record.ownerKey = origin.owner;
+        record.nativeToPush = !isUEA;
+
+        s.ownerToAgentId[msg.sender] = agentId + 1;
+        s.ownerKeyToAgentId[ownerHash] = agentId + 1;
+
+        emit Registered(
+            agentId,
+            msg.sender,
+            origin.chainNamespace,
+            origin.chainId,
+            origin.owner,
+            _agentURI,
+            agentCardHash
+        );
     }
 
     /// @inheritdoc ITAPRegistry
