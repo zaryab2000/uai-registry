@@ -49,7 +49,7 @@ contract TAPRegistry is
     uint256 public constant MAX_BINDINGS = 64;
 
     bytes32 public constant BIND_TYPEHASH = keccak256(
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,"
         "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
@@ -372,7 +372,7 @@ contract TAPRegistry is
     // ──────────────────────────────────────────────
 
     /// @inheritdoc ITAPRegistry
-    function canonicalUEA(
+    function canonicalOwner(
         uint256 agentId
     ) external view returns (address) {
         TAPRegistryStorage storage s = _getStorage();
@@ -397,7 +397,7 @@ contract TAPRegistry is
     }
 
     /// @inheritdoc ITAPRegistry
-    function canonicalUEAFromBinding(
+    function canonicalOwnerFromBinding(
         string calldata chainNamespace,
         string calldata chainId,
         address registryAddress,
@@ -505,13 +505,13 @@ contract TAPRegistry is
     // ──────────────────────────────────────────────
 
     function _verifyBindSignature(
-        address canonicalUEAAddr,
+        address callerAddr,
         BindRequest calldata req
     ) internal view returns (bool) {
         bytes32 structHash = keccak256(
             abi.encode(
                 BIND_TYPEHASH,
-                canonicalUEAAddr,
+                callerAddr,
                 keccak256(bytes(req.chainNamespace)),
                 keccak256(bytes(req.chainId)),
                 req.registryAddress,
@@ -523,8 +523,8 @@ contract TAPRegistry is
         bytes32 digest = _hashTypedDataV4(structHash);
 
         TAPRegistryStorage storage s = _getStorage();
-        uint256 raw = s.ownerToAgentId[canonicalUEAAddr];
-        if (raw == 0) revert AgentNotRegistered(uint256(uint160(canonicalUEAAddr)) % 10_000_000);
+        uint256 raw = s.ownerToAgentId[callerAddr];
+        if (raw == 0) revert AgentNotRegistered(uint256(uint160(callerAddr)) % 10_000_000);
         uint256 agentId = raw - 1;
         address expectedSigner = _ownerKeyToAddress(s.records[agentId].ownerKey);
 

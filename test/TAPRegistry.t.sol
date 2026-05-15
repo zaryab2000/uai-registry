@@ -369,7 +369,7 @@ contract TAPRegistryTest is Test {
     function test_CanonicalUEA_SameAsOwnerOf() public {
         vm.prank(ueaUser);
         uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
-        assertEq(registry.canonicalUEA(agentId), registry.ownerOf(agentId));
+        assertEq(registry.canonicalOwner(agentId), registry.ownerOf(agentId));
     }
 
     function test_AgentIdOfUEA_Registered_ReturnsId() public {
@@ -462,7 +462,7 @@ contract TAPRegistryTest is Test {
     function test_CanonicalUEA_NotRegistered_Reverts() public {
         uint256 fakeId = 12_345;
         vm.expectRevert(abi.encodeWithSelector(AgentNotRegistered.selector, fakeId));
-        registry.canonicalUEA(fakeId);
+        registry.canonicalOwner(fakeId);
     }
 
     // ──────────────────────────────────────────────

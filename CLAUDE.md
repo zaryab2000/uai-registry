@@ -46,7 +46,7 @@ TAP_REGISTRY_PROXY=0x... INITIAL_REPORTER=0x... INITIAL_SLASHER=0x... \
 
 Two upgradeable contracts deployed behind `TransparentUpgradeableProxy`:
 
-- **TAPRegistry** — Canonical identity. Registers agents via UEA, stores `AgentRecord` with origin chain metadata from `IUEAFactory.getOriginForUEA()`. Binding uses EIP-712 signatures verified via `ECDSA.tryRecover` (EOAs) or `IERC1271.isValidSignature` (smart wallets). Bind entries capped at 64 per agent, stored with swap-and-pop for O(1) unbind. Reverse lookup via `bindToCanonical` mapping for O(1) `canonicalUEAFromBinding()`.
+- **TAPRegistry** — Canonical identity. Registers agents via UEA, stores `AgentRecord` with origin chain metadata from `IUEAFactory.getOriginForUEA()`. Binding uses EIP-712 signatures verified via `ECDSA.tryRecover` (EOAs) or `IERC1271.isValidSignature` (smart wallets). Bind entries capped at 64 per agent, stored with swap-and-pop for O(1) unbind. Reverse lookup via `bindToCanonical` mapping for O(1) `canonicalOwnerFromBinding()`.
 
 - **TAPReputationRegistry** — Cross-chain reputation aggregation. Authorized `REPORTER_ROLE` addresses submit per-chain `ChainReputation` snapshots. Validates that the target chain has an active binding in TAPRegistry. Aggregation computes weighted average normalized to 18 decimals, with a scoring formula: `baseScore` (capped 7000 bps from avg value) * `volumeMultiplier` (log2-scaled feedback count) + `diversityBonus` (500 bps per chain, capped 2000) - `slashPenalty`. Score output is 0-10000 bps. `SLASHER_ROLE` records slash events with cumulative severity deductions.
 

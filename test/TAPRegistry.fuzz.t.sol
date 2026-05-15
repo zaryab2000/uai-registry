@@ -25,7 +25,7 @@ contract TAPRegistryFuzz is Test {
         0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
 
     bytes32 public constant BIND_TYPEHASH = keccak256(
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,"
         "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
@@ -296,7 +296,7 @@ contract TAPRegistryFuzz is Test {
         );
         vm.stopPrank();
 
-        (address canonical,) = registry.canonicalUEAFromBinding(
+        (address canonical,) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), boundAgentId
         );
         assertEq(canonical, caller);
@@ -340,7 +340,7 @@ contract TAPRegistryFuzz is Test {
             })
         );
 
-        (address canonical, bool verified) = registry.canonicalUEAFromBinding(
+        (address canonical, bool verified) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), boundAgentId
         );
         assertEq(canonical, caller);
@@ -349,7 +349,7 @@ contract TAPRegistryFuzz is Test {
         registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
         vm.stopPrank();
 
-        (canonical, verified) = registry.canonicalUEAFromBinding(
+        (canonical, verified) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), boundAgentId
         );
         assertEq(canonical, address(0));

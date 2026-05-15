@@ -192,10 +192,10 @@ interface ITAPRegistry {
     //  Reads — TAPRegistry-specific
     // ──────────────────────────────────────────────
 
-    /// @notice Return the canonical UEA address for an agent ID.
+    /// @notice Return the canonical owner address (EOA) for an agent ID.
     /// @param agentId The agent identifier.
-    /// @return The UEA address recovered from the stored owner key.
-    function canonicalUEA(
+    /// @return The owner address recovered from the stored owner key.
+    function canonicalOwner(
         uint256 agentId
     ) external view returns (address);
 
@@ -213,14 +213,14 @@ interface ITAPRegistry {
         uint256 agentId
     ) external view returns (BindEntry[] memory);
 
-    /// @notice Resolve a bound identity to its canonical UEA.
+    /// @notice Resolve a bound identity to its canonical owner address (EOA).
     /// @param chainNamespace CAIP-2 namespace of the bound chain.
     /// @param chainId CAIP-2 chain ID of the bound chain.
     /// @param registryAddress ERC-8004 registry on the bound chain.
     /// @param boundAgentId Agent ID on the bound chain registry.
-    /// @return canonical The canonical UEA address (address(0) if not linked).
+    /// @return canonical The canonical owner address (address(0) if not linked).
     /// @return verified Whether the binding has been cryptographically verified.
-    function canonicalUEAFromBinding(
+    function canonicalOwnerFromBinding(
         string calldata chainNamespace,
         string calldata chainId,
         address registryAddress,

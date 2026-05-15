@@ -52,7 +52,7 @@ contract TAPReputationRegistryTest is Test {
     string constant AGENT_URI = "ipfs://QmTest";
 
     bytes32 public constant BIND_TYPEHASH = keccak256(
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,"
         "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
@@ -150,7 +150,7 @@ contract TAPReputationRegistryTest is Test {
 
     struct SignParams {
         uint256 signerKey;
-        address canonicalUEA;
+        address canonicalOwner;
         string chainNs;
         string chainId;
         address registryAddr;
@@ -161,7 +161,7 @@ contract TAPReputationRegistryTest is Test {
 
     function _signBind(
         uint256 signerKey,
-        address canonicalUEA,
+        address canonicalOwner,
         string memory chainNs,
         string memory chainId,
         address registryAddr,
@@ -172,7 +172,7 @@ contract TAPReputationRegistryTest is Test {
         return _signBindStruct(
             SignParams(
                 signerKey,
-                canonicalUEA,
+                canonicalOwner,
                 chainNs,
                 chainId,
                 registryAddr,
@@ -189,7 +189,7 @@ contract TAPReputationRegistryTest is Test {
         bytes32 structHash = keccak256(
             abi.encode(
                 BIND_TYPEHASH,
-                p.canonicalUEA,
+                p.canonicalOwner,
                 keccak256(bytes(p.chainNs)),
                 keccak256(bytes(p.chainId)),
                 p.registryAddr,
