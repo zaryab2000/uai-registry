@@ -20,7 +20,7 @@ contract TAPRegistryIntegrationTest is Test {
     uint256 public adminKey;
 
     bytes32 public constant BIND_TYPEHASH = keccak256(
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,"
         "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
@@ -115,7 +115,7 @@ contract TAPRegistryIntegrationTest is Test {
         );
 
         (address canonical, bool verified) =
-            registry.canonicalUEAFromBinding("eip155", "1", ethRegistry, 42);
+            registry.canonicalOwnerFromBinding("eip155", "1", ethRegistry, 42);
         assertEq(canonical, caller);
         assertTrue(verified);
     }
@@ -172,10 +172,10 @@ contract TAPRegistryIntegrationTest is Test {
         bindings = registry.getBindings(uint256(uint160(caller)));
         assertEq(bindings.length, 2);
 
-        (address canonical,) = registry.canonicalUEAFromBinding("eip155", "8453", reg, 17);
+        (address canonical,) = registry.canonicalOwnerFromBinding("eip155", "8453", reg, 17);
         assertEq(canonical, address(0));
 
-        (canonical,) = registry.canonicalUEAFromBinding("eip155", "1", reg, 42);
+        (canonical,) = registry.canonicalOwnerFromBinding("eip155", "1", reg, 42);
         assertEq(canonical, caller);
 
         vm.stopPrank();

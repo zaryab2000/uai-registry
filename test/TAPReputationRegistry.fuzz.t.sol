@@ -29,7 +29,7 @@ contract TAPReputationRegistryFuzzTest is Test {
     address constant REGISTRY_ETH = address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432);
 
     bytes32 public constant BIND_TYPEHASH = keccak256(
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,"
         "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 

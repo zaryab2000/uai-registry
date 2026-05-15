@@ -72,7 +72,7 @@ const TAPRegistryAbi = [
     ],
   },
   {
-    name: "canonicalUEA",
+    name: "canonicalOwner",
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "agentId", type: "uint256" }],
@@ -100,7 +100,7 @@ const TAPRegistryAbi = [
     ],
   },
   {
-    name: "canonicalUEAFromBinding",
+    name: "canonicalOwnerFromBinding",
     type: "function",
     stateMutability: "view",
     inputs: [
@@ -270,7 +270,7 @@ const [record, uea, bindings, score, agg, chains, slashes, fresh1h] =
     client.readContract({
       address: AGENT_REGISTRY,
       abi: TAPRegistryAbi,
-      functionName: "canonicalUEA",
+      functionName: "canonicalOwner",
       args: [agentId],
     }),
     client.readContract({
@@ -318,7 +318,7 @@ const reverseLookups = await Promise.all(
     client.readContract({
       address: AGENT_REGISTRY,
       abi: TAPRegistryAbi,
-      functionName: "canonicalUEAFromBinding",
+      functionName: "canonicalOwnerFromBinding",
       args: [b.chainNamespace, b.chainId, b.registryAddress, b.boundAgentId],
     })
   )

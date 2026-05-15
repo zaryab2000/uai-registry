@@ -115,7 +115,7 @@ bind_chain() {
     local deadline=9999999999
 
     BIND_TYPEHASH=$(cast keccak \
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)")
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)")
 
     STRUCT_HASH=$(cast keccak "$(cast abi-encode \
         'f(bytes32,address,bytes32,bytes32,address,uint256,uint256,uint256)' \
@@ -176,7 +176,7 @@ bind_chain() {
 
         local result
         result=$(cast call "${AGENT_REGISTRY}" \
-            "canonicalUEAFromBinding(string,string,address,uint256)(address,bool)" \
+            "canonicalOwnerFromBinding(string,string,address,uint256)(address,bool)" \
             "eip155" "${chain_id}" "${ERC8004_IDENTITY}" "${bound_agent_id}" \
             --rpc-url "${PC_RPC}" 2>/dev/null || echo "")
 

@@ -26,7 +26,7 @@ import {ITAPRegistry} from "src/interfaces/ITAPRegistry.sol";
 ///   AGENT_BUILDER_KEY - Private key (used for vm.sign)
 contract BindExtChain is Script {
     bytes32 constant BIND_TYPEHASH = keccak256(
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,"
         "address registryAddress,uint256 boundAgentId,uint256 nonce," "uint256 deadline)"
     );
 
@@ -148,11 +148,12 @@ contract BindExtChain is Script {
         }
         _separator();
 
-        (address canonical, bool verified) =
-            registry.canonicalUEAFromBinding(p.chainNs, p.chainId, p.sourceRegistry, p.boundAgentId);
+        (address canonical, bool verified) = registry.canonicalOwnerFromBinding(
+            p.chainNs, p.chainId, p.sourceRegistry, p.boundAgentId
+        );
 
         _header("REVERSE LOOKUP VERIFICATION");
-        _log("Canonical UEA", vm.toString(canonical));
+        _log("Canonical Owner", vm.toString(canonical));
         _log("Verified", verified ? "true" : "false");
         _separator();
     }

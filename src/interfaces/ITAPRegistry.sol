@@ -94,6 +94,9 @@ interface ITAPRegistry {
     /// @notice Emitted when an agent's card hash is updated (via setAgentCardHash or re-registration).
     event AgentCardHashUpdated(uint256 indexed agentId, bytes32 newHash);
 
+    /// @notice Emitted when a new UEA is linked as an alias for an existing agent identity.
+    event UEALinked(uint256 indexed agentId, address indexed newUEA);
+
     /// @notice Emitted when a per-chain identity is bound to a canonical agent.
     event AgentBound(
         uint256 indexed agentId,
@@ -167,9 +170,9 @@ interface ITAPRegistry {
     //  Reads — ERC-8004-shaped
     // ──────────────────────────────────────────────
 
-    /// @notice Return the owner (UEA address) of a registered agent.
+    /// @notice Return the canonical owner address (EOA) of a registered agent.
     /// @param agentId The agent identifier.
-    /// @return The UEA address that owns this agent identity.
+    /// @return The owner address recovered from the stored owner key.
     function ownerOf(
         uint256 agentId
     ) external view returns (address);
@@ -192,10 +195,10 @@ interface ITAPRegistry {
     //  Reads — TAPRegistry-specific
     // ──────────────────────────────────────────────
 
-    /// @notice Return the canonical UEA address for an agent ID.
+    /// @notice Return the canonical owner address (EOA) for an agent ID.
     /// @param agentId The agent identifier.
-    /// @return The UEA address recovered from the stored owner key.
-    function canonicalUEA(
+    /// @return The owner address recovered from the stored owner key.
+    function canonicalOwner(
         uint256 agentId
     ) external view returns (address);
 
@@ -213,14 +216,14 @@ interface ITAPRegistry {
         uint256 agentId
     ) external view returns (BindEntry[] memory);
 
-    /// @notice Resolve a bound identity to its canonical UEA.
+    /// @notice Resolve a bound identity to its canonical owner address (EOA).
     /// @param chainNamespace CAIP-2 namespace of the bound chain.
     /// @param chainId CAIP-2 chain ID of the bound chain.
     /// @param registryAddress ERC-8004 registry on the bound chain.
     /// @param boundAgentId Agent ID on the bound chain registry.
-    /// @return canonical The canonical UEA address (address(0) if not linked).
+    /// @return canonical The canonical owner address (address(0) if not linked).
     /// @return verified Whether the binding has been cryptographically verified.
-    function canonicalUEAFromBinding(
+    function canonicalOwnerFromBinding(
         string calldata chainNamespace,
         string calldata chainId,
         address registryAddress,

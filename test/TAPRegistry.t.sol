@@ -20,6 +20,8 @@ contract TAPRegistryTest is Test {
     address public admin = makeAddr("admin");
     address public pauser = makeAddr("pauser");
     address public ueaUser = makeAddr("ueaUser");
+    address public ueaUserAlt = makeAddr("ueaUserAlt");
+    address public realOwner = makeAddr("realOwner");
 
     string constant AGENT_URI = "ipfs://QmTest123";
     bytes32 constant CARD_HASH = keccak256("agent-card-content");
@@ -31,6 +33,20 @@ contract TAPRegistryTest is Test {
             ueaUser,
             UniversalAccountId({
                 chainNamespace: "eip155", chainId: "1", owner: abi.encodePacked(ueaUser)
+            })
+        );
+
+        // Two UEAs with the SAME ownerKey but different source chains
+        factory.addUEA(
+            ueaUserAlt,
+            UniversalAccountId({
+                chainNamespace: "eip155", chainId: "84532", owner: abi.encodePacked(realOwner)
+            })
+        );
+        factory.addUEA(
+            realOwner,
+            UniversalAccountId({
+                chainNamespace: "eip155", chainId: "11155111", owner: abi.encodePacked(realOwner)
             })
         );
 
@@ -193,6 +209,61 @@ contract TAPRegistryTest is Test {
         registry.register(AGENT_URI, CARD_HASH);
     }
 
+    function test_Register_SameOwnerDifferentUEA_DeduplicatesToSameAgent() public {
+        vm.prank(realOwner);
+        uint256 agentId1 = registry.register(AGENT_URI, CARD_HASH);
+
+        string memory newURI = "ipfs://QmUpdatedFromBase";
+        bytes32 newHash = keccak256("updated-from-base");
+        vm.prank(ueaUserAlt);
+        uint256 agentId2 = registry.register(newURI, newHash);
+
+        assertEq(agentId1, agentId2, "same owner must get same agentId");
+
+        ITAPRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId1);
+        assertEq(rec.agentURI, newURI);
+        assertEq(rec.agentCardHash, newHash);
+    }
+
+    function test_Register_SameOwnerDifferentUEA_BothUEAsResolveSameAgent() public {
+        vm.prank(realOwner);
+        uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
+
+        vm.prank(ueaUserAlt);
+        registry.register("ipfs://alt", keccak256("alt"));
+
+        assertEq(registry.agentIdOfUEA(realOwner), agentId);
+        assertEq(registry.agentIdOfUEA(ueaUserAlt), agentId);
+    }
+
+    function test_Register_SameOwnerDifferentUEA_EmitsUEALinkedAndUpdateEvents() public {
+        vm.prank(realOwner);
+        uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
+
+        string memory newURI = "ipfs://QmFromAlt";
+        bytes32 newHash = keccak256("alt-card");
+
+        vm.expectEmit(true, true, false, false);
+        emit ITAPRegistry.UEALinked(agentId, ueaUserAlt);
+        vm.expectEmit(true, false, false, true);
+        emit ITAPRegistry.AgentURIUpdated(agentId, newURI);
+        vm.expectEmit(true, false, false, true);
+        emit ITAPRegistry.AgentCardHashUpdated(agentId, newHash);
+
+        vm.prank(ueaUserAlt);
+        registry.register(newURI, newHash);
+    }
+
+    function test_Register_DifferentOwners_GetDifferentAgents() public {
+        vm.prank(ueaUser);
+        uint256 id1 = registry.register(AGENT_URI, CARD_HASH);
+
+        vm.prank(realOwner);
+        uint256 id2 = registry.register("ipfs://other", keccak256("other"));
+
+        assertTrue(id1 != id2, "different owners must get different ids");
+    }
+
     function test_Register_WhenPaused_Reverts() public {
         vm.prank(pauser);
         registry.pause();
@@ -215,6 +286,35 @@ contract TAPRegistryTest is Test {
         vm.stopPrank();
 
         assertEq(registry.tokenURI(agentId), newURI);
+    }
+
+    function test_SetAgentURI_AliasUEA_Updates() public {
+        vm.prank(realOwner);
+        uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
+
+        vm.prank(ueaUserAlt);
+        registry.register("ipfs://alias", keccak256("alias"));
+
+        string memory altURI = "ipfs://QmSetByAlias";
+        vm.prank(ueaUserAlt);
+        registry.setAgentURI(altURI);
+
+        assertEq(registry.tokenURI(agentId), altURI);
+    }
+
+    function test_SetAgentCardHash_AliasUEA_Updates() public {
+        vm.prank(realOwner);
+        uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
+
+        vm.prank(ueaUserAlt);
+        registry.register("ipfs://alias", keccak256("alias"));
+
+        bytes32 altHash = keccak256("set-by-alias");
+        vm.prank(ueaUserAlt);
+        registry.setAgentCardHash(altHash);
+
+        ITAPRegistry.AgentRecord memory rec = registry.getAgentRecord(agentId);
+        assertEq(rec.agentCardHash, altHash);
     }
 
     function test_SetAgentURI_NotRegistered_Reverts() public {
@@ -300,7 +400,7 @@ contract TAPRegistryTest is Test {
     function test_CanonicalUEA_SameAsOwnerOf() public {
         vm.prank(ueaUser);
         uint256 agentId = registry.register(AGENT_URI, CARD_HASH);
-        assertEq(registry.canonicalUEA(agentId), registry.ownerOf(agentId));
+        assertEq(registry.canonicalOwner(agentId), registry.ownerOf(agentId));
     }
 
     function test_AgentIdOfUEA_Registered_ReturnsId() public {
@@ -393,7 +493,7 @@ contract TAPRegistryTest is Test {
     function test_CanonicalUEA_NotRegistered_Reverts() public {
         uint256 fakeId = 12_345;
         vm.expectRevert(abi.encodeWithSelector(AgentNotRegistered.selector, fakeId));
-        registry.canonicalUEA(fakeId);
+        registry.canonicalOwner(fakeId);
     }
 
     // ──────────────────────────────────────────────

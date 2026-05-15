@@ -28,7 +28,7 @@ contract TAPRegistryBindTest is Test {
     string constant AGENT_URI = "ipfs://QmTest";
 
     bytes32 public constant BIND_TYPEHASH = keccak256(
-        "Bind(address canonicalUEA,string chainNamespace,string chainId,"
+        "Bind(address canonicalOwner,string chainNamespace,string chainId,"
         "address registryAddress,uint256 boundAgentId,uint256 nonce,uint256 deadline)"
     );
 
@@ -79,7 +79,7 @@ contract TAPRegistryBindTest is Test {
 
     struct SignParams {
         uint256 signerKey;
-        address canonicalUEA;
+        address canonicalOwner;
         string chainNs;
         string chainId;
         address registryAddr;
@@ -90,7 +90,7 @@ contract TAPRegistryBindTest is Test {
 
     function _signBindProper(
         uint256 signerKey,
-        address canonicalUEA,
+        address canonicalOwner,
         string memory chainNs,
         string memory chainId,
         address registryAddr,
@@ -101,7 +101,7 @@ contract TAPRegistryBindTest is Test {
         return _signBind(
             SignParams(
                 signerKey,
-                canonicalUEA,
+                canonicalOwner,
                 chainNs,
                 chainId,
                 registryAddr,
@@ -118,7 +118,7 @@ contract TAPRegistryBindTest is Test {
         bytes32 structHash = keccak256(
             abi.encode(
                 BIND_TYPEHASH,
-                p.canonicalUEA,
+                p.canonicalOwner,
                 keccak256(bytes(p.chainNs)),
                 keccak256(bytes(p.chainId)),
                 p.registryAddr,
@@ -574,7 +574,7 @@ contract TAPRegistryBindTest is Test {
         ITAPRegistry.BindEntry[] memory bindings = registry.getBindings(ueaAgentId);
         assertEq(bindings.length, 0);
 
-        (address canonical,) = registry.canonicalUEAFromBinding(
+        (address canonical,) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), 42
         );
         assertEq(canonical, address(0));
@@ -715,7 +715,7 @@ contract TAPRegistryBindTest is Test {
         assertEq(bindings[1].boundAgentId, 8);
 
         // Verify the swapped element is still resolvable
-        (address canonical,) = registry.canonicalUEAFromBinding(
+        (address canonical,) = registry.canonicalOwnerFromBinding(
             "eip155", "42161", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), 8
         );
         assertEq(canonical, ueaUser);
@@ -736,7 +736,7 @@ contract TAPRegistryBindTest is Test {
     }
 
     // ──────────────────────────────────────────────
-    //  canonicalUEAFromBinding
+    //  canonicalOwnerFromBinding
     // ──────────────────────────────────────────────
 
     function test_CanonicalUEAFromBinding_LinkedAgent_ReturnsUEA() public {
@@ -745,7 +745,7 @@ contract TAPRegistryBindTest is Test {
         vm.prank(ueaUser);
         registry.bind(req);
 
-        (address canonical, bool verified) = registry.canonicalUEAFromBinding(
+        (address canonical, bool verified) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), 42
         );
         assertEq(canonical, ueaUser);
@@ -758,14 +758,14 @@ contract TAPRegistryBindTest is Test {
         vm.prank(ueaUser);
         registry.bind(req);
 
-        (, bool verified) = registry.canonicalUEAFromBinding(
+        (, bool verified) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), 42
         );
         assertTrue(verified);
     }
 
     function test_CanonicalUEAFromBinding_NoLink_ReturnsZero() public view {
-        (address canonical, bool verified) = registry.canonicalUEAFromBinding(
+        (address canonical, bool verified) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), 999
         );
         assertEq(canonical, address(0));
@@ -781,7 +781,7 @@ contract TAPRegistryBindTest is Test {
         registry.unbind("eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432));
         vm.stopPrank();
 
-        (address canonical, bool verified) = registry.canonicalUEAFromBinding(
+        (address canonical, bool verified) = registry.canonicalOwnerFromBinding(
             "eip155", "1", address(0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), 42
         );
         assertEq(canonical, address(0));
@@ -853,7 +853,7 @@ contract TAPRegistryBindTest is Test {
     }
 
     function _buildERC1271Digest(
-        address canonicalUEA,
+        address canonicalOwner,
         string memory chainNs,
         string memory chainId,
         address registryAddr,
@@ -864,7 +864,7 @@ contract TAPRegistryBindTest is Test {
         bytes32 structHash = keccak256(
             abi.encode(
                 BIND_TYPEHASH,
-                canonicalUEA,
+                canonicalOwner,
                 keccak256(bytes(chainNs)),
                 keccak256(bytes(chainId)),
                 registryAddr,
