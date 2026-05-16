@@ -52,6 +52,18 @@ On first registration, the contract queries the UEA factory to determine:
 
 Subsequent calls to `register()` update the `agentURI` and `agentCardHash` without modifying origin metadata. This is the re-registration path -- same function, idempotent semantics.
 
+### Owner-Level Deduplication
+
+The same EOA wallet can create UEAs on different source chains (Ethereum, Base, BSC, etc.), each resulting in a different UEA address on Push Chain. Without deduplication, the same human/entity could end up with multiple independent agent identities.
+
+TAPRegistry prevents this via `ownerKeyToAgentId`, a mapping from `keccak256(origin.owner)` to `agentId + 1`. The registration flow has three paths:
+
+1. **Same UEA re-registers**: The UEA already has an `ownerToAgentId` entry. Updates `agentURI` and `agentCardHash` only.
+2. **New UEA, same owner (alias)**: The UEA has no entry, but `ownerKeyToAgentId` finds a match. The new UEA is linked to the existing identity -- it gets the same `agentId`, can call `setAgentURI`/`setAgentCardHash`, and a `UEALinked` event is emitted.
+3. **New UEA, new owner (fresh mint)**: Neither mapping matches. A new `AgentRecord` is created with a deterministic `agentId`.
+
+This ensures one identity per underlying wallet, regardless of how many source chains the wallet operates from.
+
 ### Binding
 
 Once registered, the agent links its per-chain ERC-8004 registrations to the canonical identity. Each binding represents a link between:
@@ -62,7 +74,7 @@ Once registered, the agent links its per-chain ERC-8004 registrations to the can
 #### How Binding Works
 
 1. **The agent constructs an EIP-712 typed data message** containing:
-   - `canonicalUEA`: The UEA address on Push Chain
+   - `canonicalOwner`: The UEA address on Push Chain (the caller)
    - `chainNamespace`: CAIP-2 namespace of the target chain (e.g., `"eip155"`)
    - `chainId`: CAIP-2 chain ID (e.g., `"1"`)
    - `registryAddress`: The ERC-8004 IdentityRegistry contract address on that chain
@@ -102,8 +114,8 @@ The agent calls `unbind(chainNamespace, chainId, registryAddress)` to remove a b
 Agent identities are non-transferable. The contract implements the ERC-721 transfer surface (`transferFrom`, `safeTransferFrom`, `approve`, `setApprovalForAll`) but every function unconditionally reverts with `IdentityNotTransferable()`. This ensures:
 
 - An agent's identity cannot be sold or transferred to another entity.
-- The `ownerOf()` relationship is permanent.
-- The `agentId <-> UEA` mapping is immutable after registration.
+- The `ownerOf()` relationship is permanent (it returns the underlying EOA, not the UEA).
+- The `agentId <-> owner` mapping is immutable after registration. Multiple UEAs may alias to the same identity, but the canonical owner never changes.
 
 ### Storage Architecture
 
@@ -116,14 +128,16 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.registry.storage")) -
 
 The storage struct contains:
 
-| Field             | Type                                              | Purpose                                               |
-| ----------------- | ------------------------------------------------- | ----------------------------------------------------- |
-| `records`         | `mapping(uint256 => AgentRecord)`                 | Agent ID to registration record                       |
-| `bindings`        | `mapping(uint256 => BindEntry[])`                 | Agent ID to array of bindings                         |
-| `bindToCanonical` | `mapping(bytes32 => uint256)`                     | Dedup key to canonical agent ID (global uniqueness)   |
-| `bindIndex`       | `mapping(uint256 => mapping(bytes32 => uint256))` | Agent ID + chain key to array index (for O(1) lookup) |
-| `bindExists`      | `mapping(uint256 => mapping(bytes32 => bool))`    | Agent ID + chain key to existence flag                |
-| `usedNonces`      | `mapping(uint256 => mapping(uint256 => bool))`    | Agent ID + nonce to used flag (replay protection)     |
+| Field               | Type                                              | Purpose                                                     |
+| ------------------- | ------------------------------------------------- | ----------------------------------------------------------- |
+| `records`           | `mapping(uint256 => AgentRecord)`                 | Agent ID to registration record                             |
+| `bindings`          | `mapping(uint256 => BindEntry[])`                 | Agent ID to array of bindings                               |
+| `bindToCanonical`   | `mapping(bytes32 => uint256)`                     | Dedup key to canonical agent ID + 1 (global uniqueness)     |
+| `bindIndex`         | `mapping(uint256 => mapping(bytes32 => uint256))` | Agent ID + chain key to array index (for O(1) lookup)       |
+| `bindExists`        | `mapping(uint256 => mapping(bytes32 => bool))`    | Agent ID + chain key to existence flag                      |
+| `usedNonces`        | `mapping(uint256 => mapping(uint256 => bool))`    | Agent ID + nonce to used flag (replay protection)           |
+| `ownerToAgentId`    | `mapping(address => uint256)`                     | UEA address to agent ID + 1 (0 = not registered)           |
+| `ownerKeyToAgentId` | `mapping(bytes32 => uint256)`                     | keccak256(ownerKey) to agent ID + 1 (owner-level dedup)    |
 
 ### Access Control and Pausability
 
@@ -143,11 +157,11 @@ ERC-8004 issues transferable ERC-721 tokens for agent identity. TAPRegistry over
 
 ### Binding with EIP-712 Cryptographic Proof
 
-ERC-8004 has no concept of cross-chain identity binding. TAPRegistry introduces `bind`, where the UEA owner signs an EIP-712 typed data message proving they control the same identity on another chain's ERC-8004 registry. The signature binds the canonical UEA, target chain namespace, chain ID, registry address, bound agent ID, nonce, and deadline into a single verifiable proof. Both EOA signatures (ECDSA recovery) and smart wallet signatures (ERC-1271 `isValidSignature`) are supported, so agents controlled by multisigs or account-abstraction wallets can create bindings without workarounds.
+ERC-8004 has no concept of cross-chain identity binding. TAPRegistry introduces `bind`, where the UEA owner signs an EIP-712 typed data message proving they control the same identity on another chain's ERC-8004 registry. The signature binds the canonical owner address, target chain namespace, chain ID, registry address, bound agent ID, nonce, and deadline into a single verifiable proof. Both EOA signatures (ECDSA recovery) and smart wallet signatures (ERC-1271 `isValidSignature`) are supported, so agents controlled by multisigs or account-abstraction wallets can create bindings without workarounds.
 
 ### Global Binding Deduplication
 
-A bound identity tuple `(chainNamespace, chainId, registryAddress, boundAgentId)` can only be linked to one canonical UEA at a time. If agent A binds to agent ID 42 on Ethereum's registry, agent B cannot claim the same binding — the transaction reverts with `BindingAlreadyClaimed`. When agent A unbinds, the dedup key is freed and another agent may claim it. This enforces a strict one-to-one binding between per-chain identities and canonical identities, preventing impersonation where two canonical agents claim to be the same per-chain entity.
+A bound identity tuple `(chainNamespace, chainId, registryAddress, boundAgentId)` can only be linked to one canonical agent at a time. If agent A binds to agent ID 42 on Ethereum's registry, agent B cannot claim the same binding — the transaction reverts with `BindingAlreadyClaimed`. When agent A unbinds, the dedup key is freed and another agent may claim it. This enforces a strict one-to-one binding between per-chain identities and canonical identities, preventing impersonation where two canonical agents claim to be the same per-chain entity.
 
 ---
 
@@ -181,7 +195,7 @@ The relationship is:
 
 ### Reverse Lookups
 
-The `canonicalUEAFromBinding()` function enables reverse resolution: given a per-chain agent identity (chain namespace, chain ID, registry address, bound agent ID), find the canonical UEA on Push Chain. This is the key primitive that allows any chain to resolve a cross-chain agent identity question.
+The `canonicalOwnerFromBinding()` function enables reverse resolution: given a per-chain agent identity (chain namespace, chain ID, registry address, bound agent ID), find the canonical owner (EOA) on Push Chain. This is the key primitive that allows any chain to resolve a cross-chain agent identity question.
 
 ---
 
@@ -221,7 +235,7 @@ The operator constructs an EIP-712 message:
 
 ```
 Bind(
-    canonicalUEA: 0xUEA_Alice...,
+    canonicalOwner: 0xUEA_Alice...,
     chainNamespace: "eip155",
     chainId: "1",
     registryAddress: 0xEthIdentityRegistry...,
@@ -270,13 +284,13 @@ TAPRegistry.bind(BindRequest({
 Now, a user on Base interacting with agent #42 wants to know if this agent has a canonical identity. They (or a dApp, or another contract) query Push Chain:
 
 ```solidity
-(address canonical, bool verified) = TAPRegistry.canonicalUEAFromBinding(
+(address canonical, bool verified) = TAPRegistry.canonicalOwnerFromBinding(
     "eip155",
     "8453",
     0xBaseIdentityRegistry...,
     42
 );
-// canonical = 0xUEA_Alice...
+// canonical = 0xAlice... (the EOA, not the UEA)
 // verified = true
 ```
 
@@ -347,17 +361,17 @@ The binding is removed, the dedup key is freed (another agent could now claim th
 
 ### Reads
 
-| Function                                         | Description                                           |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| `ownerOf(agentId)`                               | UEA address that owns the agent (ERC-721 compatible). |
-| `tokenURI(agentId)`                              | Metadata URI (ERC-721 compatible).                    |
-| `agentURI(agentId)`                              | Metadata URI (ERC-8004 alias).                        |
-| `canonicalUEA(agentId)`                          | UEA address for an agent ID.                          |
-| `agentIdOfUEA(uea)`                              | Agent ID for a UEA address (0 if unregistered).       |
-| `getBindings(agentId)`                           | All bind entries for an agent.                        |
-| `canonicalUEAFromBinding(ns, id, addr, boundId)` | Resolve binding to canonical UEA.                     |
-| `isRegistered(agentId)`                          | Check registration status.                            |
-| `getAgentRecord(agentId)`                        | Full on-chain record.                                 |
+| Function                                           | Description                                              |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| `ownerOf(agentId)`                                 | Canonical owner address (EOA) of the agent (ERC-721).    |
+| `tokenURI(agentId)`                                | Metadata URI (ERC-721 compatible).                       |
+| `agentURI(agentId)`                                | Metadata URI (ERC-8004 alias).                           |
+| `canonicalOwner(agentId)`                          | Canonical owner address (EOA) for an agent ID.           |
+| `agentIdOfUEA(uea)`                               | Agent ID for a UEA address (0 if unregistered).          |
+| `getBindings(agentId)`                             | All bind entries for an agent.                           |
+| `canonicalOwnerFromBinding(ns, id, addr, boundId)` | Resolve binding to canonical owner (EOA).                |
+| `isRegistered(agentId)`                            | Check registration status.                               |
+| `getAgentRecord(agentId)`                          | Full on-chain record.                                    |
 
 ### Admin
 

@@ -123,11 +123,13 @@ A reporter submits a `ReputationSubmission` containing:
 Every submission goes through these checks:
 
 1. **Decimals**: `valueDecimals` must be <= 18.
-2. **Chain identifiers**: Neither `chainNamespace` nor `chainId` can be empty.
-3. **Registry address**: Cannot be `address(0)`.
-4. **Agent registration**: The `agentId` must be registered in TAPRegistry.
-5. **Binding validation**: The agent must have an active binding to the specified chain. The contract reads all bindings from TAPRegistry and checks that at least one matches the submitted `chainNamespace` and `chainId`.
-6. **Staleness protection**: If reputation data already exists for this agent+chain combination, the new submission's `sourceBlockNumber` must be strictly greater than the stored value. This prevents replay attacks and ensures data always moves forward.
+2. **Summary value range**: `summaryValue` must be within `±100 * 10^valueDecimals`. Values outside this range revert with `SummaryValueOutOfRange`.
+3. **Chain identifiers**: Neither `chainNamespace` nor `chainId` can be empty.
+4. **Registry address**: Cannot be `address(0)`.
+5. **Agent registration**: The `agentId` must be registered in TAPRegistry.
+6. **Binding validation**: The agent must have an active binding to the specified chain. The contract reads all bindings from TAPRegistry and checks that at least one matches the submitted `chainNamespace` and `chainId`.
+7. **Chain key limit**: An agent can have reputation data from at most 64 chains (`MAX_CHAIN_KEYS`). Exceeding this reverts with `TooManyChainKeys`.
+8. **Staleness protection**: If reputation data already exists for this agent+chain combination, the new submission's `sourceBlockNumber` must be strictly greater than the stored value. This prevents replay attacks and ensures data always moves forward.
 
 ### Data Storage
 
@@ -290,7 +292,7 @@ Reporters can submit up to 50 reputation snapshots in a single transaction via `
 
 ### Reaggregation
 
-The `reaggregate(agentId)` function is permissionless -- anyone can call it. It:
+The `reaggregate(agentId)` function is permissionless -- anyone can call it (subject to pause state). It:
 
 1. Reads the agent's current bindings from TAPRegistry.
 2. Iterates over stored chain keys and removes any that no longer have a corresponding binding. This handles the case where a binding was removed via TAPRegistry but the reputation data hasn't been cleaned up yet.
@@ -550,7 +552,7 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.reputation.storage"))
 
 | Function               | Access | Description                                          |
 | ---------------------- | ------ | ---------------------------------------------------- |
-| `reaggregate(agentId)` | Anyone | Force recompute. Removes data for unlinked bindings. |
+| `reaggregate(agentId)` | Anyone (pausable) | Force recompute. Removes data for unlinked bindings. |
 
 ### Reads
 
@@ -575,9 +577,10 @@ STORAGE_SLOT = keccak256(abi.encode(uint256(keccak256("tap.reputation.storage"))
 
 ### Constants
 
-| Constant            | Value  | Description                        |
-| ------------------- | ------ | ---------------------------------- |
-| `MAX_BATCH_SIZE`    | 50     | Maximum submissions per batch call |
-| `MAX_SLASH_RECORDS` | 256    | Maximum slash records per agent    |
-| `MAX_DECIMALS`      | 18     | Maximum allowed `valueDecimals`    |
-| `MAX_BPS`           | 10,000 | Maximum score / severity           |
+| Constant            | Value  | Description                              |
+| ------------------- | ------ | ---------------------------------------- |
+| `MAX_BATCH_SIZE`    | 50     | Maximum submissions per batch call       |
+| `MAX_SLASH_RECORDS` | 256    | Maximum slash records per agent          |
+| `MAX_CHAIN_KEYS`    | 64     | Maximum chains with reputation per agent |
+| `MAX_DECIMALS`      | 18     | Maximum allowed `valueDecimals`          |
+| `MAX_BPS`           | 10,000 | Maximum score / severity                 |

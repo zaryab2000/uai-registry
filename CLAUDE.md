@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TAP (Trustless Agents Plus) is an ERC-8004-compatible Universal Agent Identity Registry on Push Chain. It uses Universal Executor Account (UEA) addresses as canonical, chain-agnostic agent identifiers. Per-chain ERC-8004 registries become "bound registries" linked to the canonical UEA via EIP-712 signatures. Identity tokens are soulbound (non-transferable), with `agentId = uint256(uint160(ueaAddress)) % 10_000_000` (7-digit, deterministic). ID 0 is reserved as sentinel; addresses that truncate to 0 receive ID 10_000_000. Collision guard reverts if two addresses share the same truncated ID.
+TAP (Trustless Agents Plus) is an ERC-8004-compatible Universal Agent Identity Registry on Push Chain. It uses Universal Executor Account (UEA) addresses as canonical, chain-agnostic agent identifiers. Per-chain ERC-8004 registries become "bound registries" linked to the canonical identity via EIP-712 signatures. Identity tokens are soulbound (non-transferable), with `agentId = uint256(uint160(ueaAddress)) % 10_000_000` (7-digit, deterministic). ID 0 is reserved as sentinel; addresses that truncate to 0 receive ID 10_000_000. Collision guard reverts if two addresses share the same truncated ID.
 
-The TAPReputationRegistry is a cross-chain agent reputation aggregator that collects per-chain reputation snapshots from authorized reporters and computes aggregated scores keyed to canonical UEA identities.
+Registration deduplicates on the underlying EOA (`ownerKey`), not the UEA address. The same wallet registering from different source chains (different UEAs) resolves to a single canonical identity via `ownerKeyToAgentId`. Additional UEAs become aliases (emitting `UEALinked`) and can call `setAgentURI`/`setAgentCardHash` on the shared identity.
+
+The TAPReputationRegistry is a cross-chain agent reputation aggregator that collects per-chain reputation snapshots from authorized reporters and computes aggregated scores keyed to canonical agent identities.
 
 ## Build and Test
 
@@ -46,7 +48,7 @@ TAP_REGISTRY_PROXY=0x... INITIAL_REPORTER=0x... INITIAL_SLASHER=0x... \
 
 Two upgradeable contracts deployed behind `TransparentUpgradeableProxy`:
 
-- **TAPRegistry** — Canonical identity. Registers agents via UEA, stores `AgentRecord` with origin chain metadata from `IUEAFactory.getOriginForUEA()`. Binding uses EIP-712 signatures verified via `ECDSA.tryRecover` (EOAs) or `IERC1271.isValidSignature` (smart wallets). Bind entries capped at 64 per agent, stored with swap-and-pop for O(1) unbind. Reverse lookup via `bindToCanonical` mapping for O(1) `canonicalOwnerFromBinding()`.
+- **TAPRegistry** — Canonical identity. Registers agents via UEA, stores `AgentRecord` with origin chain metadata from `IUEAFactory.getOriginForUEA()`. Owner-level dedup via `ownerKeyToAgentId` mapping (`keccak256(origin.owner)` → `agentId + 1`) prevents duplicate identities when the same EOA registers from multiple source chains (different UEAs). Alias UEAs emit `UEALinked` and share the same `agentId`. Binding uses EIP-712 signatures (field: `canonicalOwner`) verified via `ECDSA.tryRecover` (EOAs) or `IERC1271.isValidSignature` (smart wallets). Bind entries capped at 64 per agent, stored with swap-and-pop for O(1) unbind. Reverse lookup via `bindToCanonical` mapping for O(1) `canonicalOwnerFromBinding()`.
 
 - **TAPReputationRegistry** — Cross-chain reputation aggregation. Authorized `REPORTER_ROLE` addresses submit per-chain `ChainReputation` snapshots. Validates that the target chain has an active binding in TAPRegistry. Aggregation computes weighted average normalized to 18 decimals, with a scoring formula: `baseScore` (capped 7000 bps from avg value) * `volumeMultiplier` (log2-scaled feedback count) + `diversityBonus` (500 bps per chain, capped 2000) - `slashPenalty`. Score output is 0-10000 bps. `SLASHER_ROLE` records slash events with cumulative severity deductions.
 
@@ -60,6 +62,7 @@ Source chains (Sepolia, Base, BSC) use the existing ERC-8004 IdentityRegistry di
 - **UEAFactory** at `0x00000000000000000000000000000000000000eA` (Push Chain predeploy) — only `getOriginForUEA()` is called (view, no reentrancy risk)
 - **AccessControlUpgradeable** for settlement contracts (PAUSER_ROLE, REPORTER_ROLE, SLASHER_ROLE)
 - **Custom errors** in `src/libraries/RegistryErrors.sol` (identity) and `src/libraries/ReputationErrors.sol` (reputation) — no string reverts in production code
+- **Sentinel-offset pattern** for mappings: `ownerToAgentId` and `ownerKeyToAgentId` store `agentId + 1` so that 0 means "not registered" (distinguishes from a valid agentId of 0, which is reserved anyway)
 
 ## Compiler and Toolchain
 
